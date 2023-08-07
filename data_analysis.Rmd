@@ -43,10 +43,10 @@ Here we will select the species to analyzed based on the plataform requirements,
 
 ```{r select_eezs, eval = T, echo = T}
 
-selected_countries <- c(
-  "Peru",
-  "Chile"
-)
+# selected_countries <- c(
+  # "Peru",
+  # "Chile"
+# )
 
 # Read SAU EEZs
 sf_sau_eez <- MyFunctions::my_sf("SAU") %>% 
@@ -88,7 +88,19 @@ We selected all species captured since 2006 within the EEZs of the region. Such 
 
 exploited_species_list <- read_csv("~/Library/CloudStorage/OneDrive-UBC/Data/Species/exploited_species_list.csv")
 
-spp_selected <- "Engraulis ringens"
+spp_selected <- c("Thunnus albacares",
+                  "Katsuwonus pelamis",
+                  "Engraulis albidus",
+                  "Engraulis anchoita",
+                  "Engraulis australis",
+                  "Engraulis capensis ",
+                  "Engraulis encrasicolus",
+                  "Engraulis eurystole",
+                  "Engraulis japonicus",
+                  "Engraulis mordax",
+                  "Engraulis ringens",
+                  "Gadus macrocephalus"
+                  )
 
 
 # Read species list
@@ -116,15 +128,16 @@ Where $MCP_f$ represents the future years and $MCP_p$ represents the current tim
 
 ```{r main_fx, eval = F, echo = T}
 
-mainfx <- function(taxon_key){
+mainfx <- function(taxon){
   
-  to_read <- paste0(taxon_key,"MCP.RData")
+  to_read <- paste0(taxon,"MCP.RData")
   
   for(m in 1:6){
     
     #################################
     # List esm folders
     file_to_read <- paste0(files_path[m],"/",to_read)
+    
     if(file.exists(file_to_read)){
       load(file_to_read)
       
@@ -142,35 +155,33 @@ mainfx <- function(taxon_key){
           left_join(regional_grid,
                     by = "index") %>%
           filter(!is.na(eez_id)) %>%
-        group_by(eez_id,year,period) %>% 
+        group_by(eez_name,year,period) %>% 
         # Sum total catch per eez per year
         summarise(eez_catch = sum(value, na.rm = T),.groups = "drop") %>% 
-        group_by(eez_id,period) %>% 
+        group_by(eez_name,period) %>% 
         # Average yearly data
         summarise(mean_catch = mean(eez_catch,na.rm = T),.groups = "drop")
       
       # Estimate percentage change
-      future_data <-
-        spp_data %>% 
+      future_data <-  spp_data %>% 
         gather("year","value",`1951`:`2100`) %>% 
         filter(year > 2004) %>% 
         left_join(regional_grid,
                   by = "index") %>%
         filter(!is.na(eez_id)) %>%
-        group_by(eez_id,year) %>% 
+        group_by(eez_name,year) %>% 
         # Sum total catch per eez per year
         summarise(eez_catch = sum(value, na.rm = T),.groups = "drop") %>% 
         left_join(early_data,
-                  by = "eez_id") %>%
+                  by = "eez_name") %>%
         # spread(period,mean_catch) %>% 
         mutate(
           per_change = ifelse(mean_catch == 0 & eez_catch > 0,100, 
                               round((eez_catch-mean_catch)/mean_catch*100)
           ),
-          species = spp_selected,
-          eez_id = ifelse(eez_id == eez_name)
+          species = taxon
         ) %>% 
-        group_by(species,eez_id) %>% 
+        group_by(species,eez_name) %>% 
         mutate(
           per_change_rm = round(zoo::rollmean(
             per_change,
@@ -180,15 +191,15 @@ mainfx <- function(taxon_key){
           )
         ) %>% 
         filter(!is.na(per_change_rm)) %>%
-        select(species,eez_id,year,per_change_rm)
+        select(species,eez_name,year,per_change_rm)
       
       # Visualization
-      # ggplot(future_data) +
+      # ggplot() +
       #   geom_line(data = future_data,
       #     aes(
       #       x = as.numeric(year),
       #       y = per_change_rm,
-      #       color = as.character(eez_id)
+      #       color = eez_name
       #     )
       #   ) +
       #   scale_color_viridis_d("EEZ",option = "I") +
@@ -207,12 +218,13 @@ mainfx <- function(taxon_key){
       
       
       final_output <- partial_output %>% 
-        group_by(species,eez_id,year) %>% 
+        group_by(species,eez_name,year) %>% 
         summarise(mean_per_change = mean(per_change_rm, na.rm =T),
                   sd_per_change = sd(per_change_rm, na.rm =T))
       
       
-      name <- paste0(spp_selected,".csv")
+      spp_name <- spp_list %>% filter(taxon_key %in% taxon) %>% pull(common_name)
+      name <- paste0(spp_name,".csv")
       
       write_csv(final_output,
                 my_path("R","Raw",name))
@@ -232,30 +244,31 @@ mainfx <- function(taxon_key){
 ```{r protocol_control_panel, eval = F, echo = T}
 
 # Get species list
-ssp_list <- read_csv("../data/species/project_spplist.csv")
+# spp_list <- read_csv("../data/species/project_spplist.csv")
 
-par_spp_list <- ssp_list %>% 
+par_spp_list <- spp_list %>% 
   pull(taxon_key)
 
 # Get DBEM coords
-dbem_coords <- read_csv("~/Library/CloudStorage/OneDrive-UBC/Data/Spatial/DBEM/Lon_Lat_DBEM.txt",
-                        col_names = FALSE)
-colnames(dbem_coords) <- c("index","lon","lat")
+dbem_coords <- my_data("dbem_coords")
+
 # Get the regional grid 
-region_index <- read_csv("../data/spatial/region_index.csv") 
+# region_index <- read_csv("../data/spatial/region_index.csv") 
 
 # Get list of index by EEZ
-eez_grid_id <- my_path("Spa","DBEM", "EEZ_CellID.xlsx", read = TRUE)
-colnames(eez_grid_id) <- c("eez_id","index")
+# eez_grid_id <- my_path("Spa","DBEM", "EEZ_CellID.xlsx", read = TRUE)
+# colnames(eez_grid_id) <- c("eez_id","index")
 
-regional_grid <- eez_grid_id %>% 
-  filter(eez_id %in% sf_region$eezid)
+eez_grid_id <- my_data("sau_index")
+
+regional_grid <- eez_grid_id #%>%
+  # filter(eez_id %in% sf_region$eezid)
 
 # Get the DBEM path
-files_path <- list.files(my_path("G","dbem/dbem_cmip6/r_data/C6GFDL85F1_t2"),
-                         full.names = T)
+files_path <- my_path("G","dbem/dbem_cmip6/r_data/C6GFDL85F1_t2")
 
 ```
+
 
 ### Run protocol (Parallel)
 
@@ -263,19 +276,21 @@ files_path <- list.files(my_path("G","dbem/dbem_cmip6/r_data/C6GFDL85F1_t2"),
 # get the cores from your computer.
 # No need for more than 12 cores 
 # Never use all cores so you computer doesn't crash
-cores <- ifelse(detectCores() > 12, 12, detectCores()-6)  
-cl <- makeCluster(cores[1])
-registerDoParallel(cl)
+# cores <- ifelse(detectCores() > 12, 12, detectCores()-6)  
+# cl <- makeCluster(cores[1])
+# registerDoParallel(cl)
+# 
+# 
+# run <- foreach(i = 1:length(par_spp_list), .packages = "tidyverse") %dopar% {
+#   mainfx(par_spp_list[i])
+# }
+# 
+# stopCluster(cl)
+# gc()
 
-
-run <- foreach(i = 1:length(spp_to_run), .packages = "tidyverse") %dopar% {
-  mainfx(spp_to_run[i])
-}
-
-stopCluster(cl)
-gc()
-
-
+suppressWarnings(
+lapply(par_spp_list, mainfx)
+)
 ```
 
 # Test runs
