@@ -109,7 +109,7 @@ spp_list <- exploited_species_list %>%
   filter(taxon_name %in% spp_selected)
 
 # Save complete list
-# write_csv(spp_list,"../data/species/project_spplist.csv")
+write_csv(spp_list,"../Data/project_spplist.csv")
 
 ```
 
@@ -130,15 +130,17 @@ Where $MCP_f$ represents the future years and $MCP_p$ represents the current tim
 
 mainfx <- function(taxon){
   
-  to_read <- paste0(taxon,"MCP.RData")
   
-  for(m in 1:6){
+  # List esm folders
+    scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)
+  to_read <- paste0(taxon,"MCP.RData")
+    for(m in 1:6){
     
-    #################################
-    # List esm folders
-    file_to_read <- paste0(files_path[m],"/",to_read)
+    file_to_read <- paste0(scenrios[m],"/",to_read)
+    print(file_to_read)
     
-    if(file.exists(file_to_read)){
+    # if(file.exists(file_to_read)){
+      
       load(file_to_read)
       
       # Transform it to df
@@ -181,33 +183,14 @@ mainfx <- function(taxon){
           ),
           species = taxon
         ) %>% 
-        group_by(species,eez_name) %>% 
+        filter(!is.na(per_change)) %>% 
+        select(species,eez_name,year,per_change) %>% 
         mutate(
-          per_change_rm = round(zoo::rollmean(
-            per_change,
-            k = 10, 
-            fill = NA, 
-            align = "right")
-          )
-        ) %>% 
-        filter(!is.na(per_change_rm)) %>%
-        select(species,eez_name,year,per_change_rm)
+          esm = str_sub(file_to_read,79,82),
+          ssp = ifelse(str_sub(file_to_read,83,84) == 26,"ssp126","ssp585")
+        )
       
-      # Visualization
-      # ggplot() +
-      #   geom_line(data = future_data,
-      #     aes(
-      #       x = as.numeric(year),
-      #       y = per_change_rm,
-      #       color = eez_name
-      #     )
-      #   ) +
-      #   scale_color_viridis_d("EEZ",option = "I") +
-      #   my_ggtheme_p() +
-      #   labs(
-      #     x= "Year",
-      #     y = "Change Relative to Historical Value (%)"
-      #     )
+      
       
       # Join data for all three models
       if(m == 1){
@@ -216,11 +199,64 @@ mainfx <- function(taxon){
         partial_output <- bind_rows(partial_output,future_data)
       }
       
-      
+    }
+    
       final_output <- partial_output %>% 
-        group_by(species,eez_name,year) %>% 
-        summarise(mean_per_change = mean(per_change_rm, na.rm =T),
-                  sd_per_change = sd(per_change_rm, na.rm =T))
+        group_by(species,eez_name,year,ssp) %>% 
+        summarise(mean_per_change = mean(per_change, na.rm =T),
+                  sd_per_change = sd(per_change, na.rm =T)) %>% 
+        group_by(species,eez_name,ssp) %>% 
+        mutate(
+          per_change_rm = round(zoo::rollmean(
+            mean_per_change,
+            k = 10, 
+            fill = NA, 
+            align = "right")
+          )
+        ) %>% 
+        filter(!is.na(per_change_rm))
+      
+      # Visualization
+      # ggplot() +
+      #   geom_line(data = final_output,
+      #     aes(
+      #       x = as.numeric(year),
+      #       y = mean_per_change,
+      #       color = eez_name
+      #     )
+      #   ) +
+      #   geom_line(data = final_output,
+      #     aes(
+      #       x = as.numeric(year),
+      #       y = per_change_rm,
+      #       group = eez_name
+      #     ),
+      #     color = "black"
+      #   ) +
+      #   geom_ribbon(data = final_output,
+      #     aes(
+      #       x = as.numeric(year),
+      #        ymax = per_change_rm+sd_per_change,
+      #       ymin = per_change_rm-sd_per_change,
+      #       fill = eez_name
+      #     ),
+      #     alpha = 0.5
+      #   ) +
+      #   scale_color_viridis_d("EEZ",option = "I") +
+      #   scale_fill_viridis_d("EEZ",option = "I") +
+      #   my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10) +
+      #   labs(
+      #     x= "Year",
+      #     y = "Change Relative to Historical Value (%)"
+      #     ) +
+      #   facet_wrap(~ssp)
+      # 
+      # ggsave(
+      #   plot = last_plot(),
+      #   "../Results/Figures/example_figure_anchoveta.png",
+      #   width = 7,
+      #   height = 4
+      # )
       
       
       spp_name <- spp_list %>% filter(taxon_key %in% taxon) %>% pull(common_name)
@@ -228,12 +264,11 @@ mainfx <- function(taxon){
       
       write_csv(final_output,
                 my_path("R","Raw",name))
-      
-    }else{
-      return(print(paste("something went wrong with",taxon_key,
-                         str_to_lower(str_sub(files_path[m],49,56)))))
-    }
-  }
+    
+    # }else{
+      # return(print(paste("something went wrong with",taxon,
+                         # str_to_lower(str_sub(files_path[m],49,56)))))
+    # }
   
 } # Close function
 
@@ -244,7 +279,7 @@ mainfx <- function(taxon){
 ```{r protocol_control_panel, eval = F, echo = T}
 
 # Get species list
-# spp_list <- read_csv("../data/species/project_spplist.csv")
+spp_list <- read_csv("../Data/project_spplist.csv")
 
 par_spp_list <- spp_list %>% 
   pull(taxon_key)
@@ -265,7 +300,7 @@ regional_grid <- eez_grid_id #%>%
   # filter(eez_id %in% sf_region$eezid)
 
 # Get the DBEM path
-files_path <- my_path("G","dbem/dbem_cmip6/r_data/C6GFDL85F1_t2")
+files_path <- my_path("G","dbem/dbem_cmip6/r_data")
 
 ```
 
@@ -287,6 +322,8 @@ files_path <- my_path("G","dbem/dbem_cmip6/r_data/C6GFDL85F1_t2")
 # 
 # stopCluster(cl)
 # gc()
+
+mainfx(par_spp_list[1])
 
 suppressWarnings(
 lapply(par_spp_list, mainfx)
