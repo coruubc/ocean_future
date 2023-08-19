@@ -1,6 +1,7 @@
 ---
-title: "Data analysis"
-author: "Juliano Palacios Abrantes & William W.L. Cheung"
+title: "Data Outputs for Ocean Future Project"
+subtitle: "Juliano Palacios Abrantes & William W.L. Cheung"
+author: "Contact: j.palacios@oceans.ubc.ca"
 date: "2023-07-03"
 output: pdf_document
 ---
@@ -28,20 +29,35 @@ sf::sf_use_s2(use_s2 = FALSE)
 
 # Overall
 
-This script uses the DBEM runs with the CMIP6 Earth System Models (GFDL, IPSL, MPIS) under SSP 126 and 585 to estimate the percentage change in each species maximum catch potential (MCP). The calculation is made by species in each EEZ and the output is a yearly percentage change relative to today starting from 2020.
+This script uses the DBEM runs with the CMIP6 Earth System Models (GFDL, IPSL, MPIS) under SSP 126 and 585 to estimate the percentage change in each species maximum catch potential (MCP). The calculation is made by species in each EEZ and the output is a yearly percentage change relative to today starting from 2014.
 
-# Select species
+# Species selection
 
-Here we will select the species to analyzed based on the plataform requirements, From Sarah:
+Climate change projections for the following species were requested to be used in the project:
 
 - Global for tunas. 
+  - *Thunnus albacares*
+  - *Katsuwonus pelamis*
+
 - Alaska cod, they might also extend into other EEZs in the Arctic. 
+
+  - *Gadus macrocephalus*
+
 - Anchovy, I thought we could include all species in the family Engraulidae. 
+  - *Engraulis albidus*
+  - *Engraulis anchoita*
+  - *Engraulis australis*
+  - *Engraulis capensis* 
+  - *Engraulis encrasicolus*
+  - *Engraulis eurystole*
+  - *Engraulis japonicus*
+  - *Engraulis mordax*
+  - *Engraulis ringens*
 
 
-## Get EEZs
+<!-- ## Get EEZs -->
 
-```{r select_eezs, eval = T, echo = T}
+```{r select_eezs, eval = F, echo = F}
 
 # selected_countries <- c(
   # "Peru",
@@ -78,11 +94,9 @@ sf_region %>%  st_simplify(preserveTopology = TRUE, dTolerance = 1) %>%
 
 ```
 
-## Get speceis list
+Here we filter our model runs to the selected species. There are eight species in our data set from those originally requested.
 
-We selected all species captured since 2006 within the EEZs of the region. Such species represent 66% of the identified species fished since 2006
-
-```{r select_spp, eval = T, echo = T}
+```{r select_spp, eval = T, echo = F, message = F, warning = F}
 
 # Read species list
 
@@ -109,54 +123,70 @@ spp_list <- exploited_species_list %>%
   filter(taxon_name %in% spp_selected)
 
 # Save complete list
-write_csv(spp_list,"../Data/project_spplist.csv")
+# write_csv(spp_list,"../Data/project_spplist.csv")
 
+head(spp_list,8)
 ```
 
 ## Main analysis
 
 We projected the distribution of species using the DBEM coupled with three Earth System Models (ESMs) following two Shared Socioeconomic Pathways (SSPs); SSP 126 representing a low emission / high mitigation scenario and SSP 585 representing a high emission / no mitigation scenario. 
 
-For each species, we projected its future maximum catch potential or "MCP" (a proxy of MSY) within each EEZ from 1951 to 2100. We then determined a present time period representing the average projections from 1995 to 2014 to match the historical data used by the ESMs. For each subsequent year, we estimate the percentage change in MCP ($\Delta{MCP}$) as:
+For each species, we projected its future maximum catch potential or "MCP" (a proxy of MSY - See reference documents) within each EEZ from 1951 to 2100. We then determined a present time period representing the average projections from 1995 to 2014 to match the historical data used by the ESMs. For each subsequent year, we estimate the percentage change in MCP ($\Delta{MCP}_y$) as:
 
 
-$$\Delta{MCP} =\frac{MCP_f-MCP_p}{MCP_p}*100$$
-Where $MCP_f$ represents the future years and $MCP_p$ represents the current time period. As an arbitrary rules, if $MCP_p$ = 0 & $MCP_f$ > 0 then ($\Delta{MCP}$) = 100, and if $MCP_p$ > 0 & $MCP_f$ < 0 then ($\Delta{MCP}$) = -100.
+$$\Delta{MCP}_y =\frac{MCP_f-MCP_p}{MCP_p}*100$$
+Where $MCP_f$ represents the future years and $MCP_p$ represents the current time period. As an arbitrary rules, if $MCP_p$ = 0 & $MCP_f$ > 0 then ($\Delta{MCP}$) = 100, and if $MCP_p$ > 0 & $MCP_f$ < 0 then ($\Delta{MCP}$) = -100. 
 
+The results for each species and SSP was first average by ESM $\pm$ s.d. to account for structural differences among models and then average by 10 years blocks (i.e., running average) to reduce the temporal (natural) variability of the system (See reference documentation).
 
 ### Function needed
 
-```{r main_fx, eval = F, echo = T}
+See the [GitHub](https://github.com/jepa/ocean_future) repository for code details.
+
+```{r main_fx, eval = F, echo = F}
 
 mainfx <- function(taxon){
   
   
   # List esm folders
-    scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)
+  scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)
   to_read <- paste0(taxon,"MCP.RData")
-    for(m in 1:6){
+  
+  for(m in 1:6){
     
     file_to_read <- paste0(scenrios[m],"/",to_read)
-    print(file_to_read)
-    
-    # if(file.exists(file_to_read)){
+    if(file.exists(file_to_read)){
       
       load(file_to_read)
       
       # Transform it to df
-      spp_data <- as.data.frame(sppMCPfnl) %>% 
+      
+      if(exists("sppMCPfnl", envir = .GlobalEnv) == TRUE){
+        
+        spp_data <- as.data.frame(sppMCPfnl) %>% 
         rowid_to_column("index")
         
-      colnames(spp_data) <- c("index",(seq(1951,2100,1)))
+        colnames(spp_data) <- c("index",(seq(1951,2100,1)))
       rm(sppMCPfnl) # remove data for computing power
+        
+      }else{
+        
+        spp_data <- as.data.frame(data) %>% 
+        rowid_to_column("index")
+        colnames(spp_data) <- c("index",(seq(1951,2100,1)))
+        rm(data) # remove data for computing power
+      }
+      
+      
       
       early_data <- spp_data %>% 
         gather("year","value",`1951`:`2100`) %>% 
         mutate(period = ifelse(year < 2014 & year > 1995,"present",NA)) %>% 
         filter(!is.na(period)) %>% 
-          left_join(regional_grid,
-                    by = "index") %>%
-          filter(!is.na(eez_id)) %>%
+        left_join(regional_grid,
+                  by = "index") %>%
+        filter(!is.na(eez_id)) %>%
         group_by(eez_name,year,period) %>% 
         # Sum total catch per eez per year
         summarise(eez_catch = sum(value, na.rm = T),.groups = "drop") %>% 
@@ -199,84 +229,46 @@ mainfx <- function(taxon){
         partial_output <- bind_rows(partial_output,future_data)
       }
       
+    }else{
+      partial_output
+      print(file_to_read)
     }
+  }
     
-      final_output <- partial_output %>% 
-        group_by(species,eez_name,year,ssp) %>% 
-        summarise(mean_per_change = mean(per_change, na.rm =T),
-                  sd_per_change = sd(per_change, na.rm =T)) %>% 
-        group_by(species,eez_name,ssp) %>% 
-        mutate(
-          per_change_rm = round(zoo::rollmean(
-            mean_per_change,
-            k = 10, 
-            fill = NA, 
-            align = "right")
-          )
-        ) %>% 
-        filter(!is.na(per_change_rm))
-      
-      # Visualization
-      # ggplot() +
-      #   geom_line(data = final_output,
-      #     aes(
-      #       x = as.numeric(year),
-      #       y = mean_per_change,
-      #       color = eez_name
-      #     )
-      #   ) +
-      #   geom_line(data = final_output,
-      #     aes(
-      #       x = as.numeric(year),
-      #       y = per_change_rm,
-      #       group = eez_name
-      #     ),
-      #     color = "black"
-      #   ) +
-      #   geom_ribbon(data = final_output,
-      #     aes(
-      #       x = as.numeric(year),
-      #        ymax = per_change_rm+sd_per_change,
-      #       ymin = per_change_rm-sd_per_change,
-      #       fill = eez_name
-      #     ),
-      #     alpha = 0.5
-      #   ) +
-      #   scale_color_viridis_d("EEZ",option = "I") +
-      #   scale_fill_viridis_d("EEZ",option = "I") +
-      #   my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10) +
-      #   labs(
-      #     x= "Year",
-      #     y = "Change Relative to Historical Value (%)"
-      #     ) +
-      #   facet_wrap(~ssp)
-      # 
-      # ggsave(
-      #   plot = last_plot(),
-      #   "../Results/Figures/example_figure_anchoveta.png",
-      #   width = 7,
-      #   height = 4
-      # )
-      
-      
-      spp_name <- spp_list %>% filter(taxon_key %in% taxon) %>% pull(common_name)
-      name <- paste0(spp_name,".csv")
-      
-      write_csv(final_output,
-                my_path("R","Raw",name))
+    print(paste(unique(partial_output$esm)))
     
-    # }else{
-      # return(print(paste("something went wrong with",taxon,
-                         # str_to_lower(str_sub(files_path[m],49,56)))))
-    # }
-  
+    final_output <- partial_output %>% 
+      group_by(species,eez_name,year,ssp) %>% 
+      summarise(mean_per_change = mean(per_change, na.rm =T),
+                sd_per_change = sd(per_change, na.rm =T)) %>% 
+      group_by(species,eez_name,ssp) %>% 
+      mutate(
+        per_change_rm = round(zoo::rollmean(
+          mean_per_change,
+          k = 10, 
+          fill = NA, 
+          align = "right")
+        )
+      ) %>% 
+      filter(!is.na(per_change_rm))
+    
+    
+    spp_name <- spp_list %>% filter(taxon_key %in% taxon) %>% pull(common_name)
+    name <- paste0(spp_name,".csv")
+    
+    write_csv(final_output,
+              my_path("R","Raw",name))
+    
+    
 } # Close function
 
 ```
 
 ### Control panel
 
-```{r protocol_control_panel, eval = F, echo = T}
+Prepare data for running the protocol
+
+```{r protocol_control_panel, eval = F, echo = F}
 
 # Get species list
 spp_list <- read_csv("../Data/project_spplist.csv")
@@ -287,27 +279,17 @@ par_spp_list <- spp_list %>%
 # Get DBEM coords
 dbem_coords <- my_data("dbem_coords")
 
-# Get the regional grid 
-# region_index <- read_csv("../data/spatial/region_index.csv") 
-
-# Get list of index by EEZ
-# eez_grid_id <- my_path("Spa","DBEM", "EEZ_CellID.xlsx", read = TRUE)
-# colnames(eez_grid_id) <- c("eez_id","index")
-
-eez_grid_id <- my_data("sau_index")
-
-regional_grid <- eez_grid_id #%>%
-  # filter(eez_id %in% sf_region$eezid)
-
-# Get the DBEM path
-files_path <- my_path("G","dbem/dbem_cmip6/r_data")
+# eez grid ID
+regional_grid <- my_data("sau_index")
 
 ```
 
 
-### Run protocol (Parallel)
+### Run protocol 
 
-```{r run_protocol, eval = F, echo = T}
+Run `mainfx` across species
+
+```{r run_protocol, eval = F, echo = F}
 # get the cores from your computer.
 # No need for more than 12 cores 
 # Never use all cores so you computer doesn't crash
@@ -323,55 +305,94 @@ files_path <- my_path("G","dbem/dbem_cmip6/r_data")
 # stopCluster(cl)
 # gc()
 
-mainfx(par_spp_list[1])
-
 suppressWarnings(
-lapply(par_spp_list, mainfx)
+lapply(par_spp_list[3], mainfx)
 )
 ```
 
-# Test runs
 
-Testing results for a taxon to make sure all EEZs are included
+## Results
 
-```{r test_result, eval = T, echo = T}
+### Metadata
+
+Each species has its own file in a `csv` format containing the average projections across ESMS by SSP on all EEZs where the specie is present. Each file contains the following structure:
+
+- `species`, species code
+- `eez_name`,  name of the EEZ according to The Sea Around Us (See www.searoundus.org). Note that sometimes a county's EEZ can be split in 2 or 3, for example Mexico Pacific and Mexico Atlantic
+- `year`, Year or projection from 2014 to 2100
+- ssp, Shared Socioeconomic Pathway according to the IPPC. ssp 126 represents a low emisison scenario and ssp 585 a high emisison scenario. (See https://www.dkrz.de/en/communication/climate-simulations/cmip6-en/the-ssp-scenarios)
+- `mean_per_change`, mean percentage change from three Earth System Models
+- `sd_per_change`, standard deviation percentage change from three Earth System Models
+- `per_cahnge_rm`, 10 years running mean of the mean percentage change from three Earth System Models
+
+
+### Test runs
+
+Using Anchoveta in Chile Peru and Ecuador as an example of model outputs. 
+
+```{r test_result, eval = T, echo = F}
 #  Note you need to run firt two chunks
 
 # Load result test
-result_df <- read_csv("~/Data/ocea_nutri_cc/results/600107_per_change.csv")
+result_df <- my_path("R","ocean_future_projections","Anchoveta.csv", read = T)
 
-unique(result_df$esm) #c6gfdl
-
-unique(result_df$ssp) # "ssp26" "ssp85"
-
-summary(result_df)
+head(result_df)
 ```
 
 
-```{r test_result_map, eval = T, echo = T}
+```{r test_result_map, eval = T, echo = F}
 
-sf_region %>%  
-  st_simplify(preserveTopology = TRUE, dTolerance = 1) %>% # Picaso style map to load faster
-  st_shift_longitude() %>% # Center projection on Pacific Islands
-  rename(eez_id = eezid) %>% # To mathc SAU shapefile
-  left_join(result_df) %>% 
-  ggplot() +
-  geom_sf(
-    aes(
-      fill = per_change_mid
-    )
-  ) + facet_wrap(~ssp, ncol = 1) +
-  scale_fill_gradient2()
-  
+# Visualization
+ggplot() +
+  geom_line(data = result_df,
+            aes(
+              x = as.numeric(year),
+              y = mean_per_change,
+              color = eez_name
+            )
+  ) +
+  geom_line(data = result_df,
+            aes(
+              x = as.numeric(year),
+              y = per_change_rm,
+              group = eez_name
+            ),
+            color = "black"
+  ) +
+  geom_ribbon(data = result_df,
+              aes(
+                x = as.numeric(year),
+                ymax = per_change_rm+sd_per_change,
+                ymin = per_change_rm-sd_per_change,
+                fill = eez_name
+              ),
+              alpha = 0.5
+  ) +
+  scale_color_viridis_d("EEZ") +
+  scale_fill_viridis_d("EEZ",) +
+  my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10) +
+  labs(
+    x= "Year",
+    y = "Change Relative to Historical Value (%)"
+  ) +
+  facet_wrap(~ssp)
 
-
-
+# ggsave(
+#   plot = last_plot(),
+#   "../Results/Figures/example_figure_anchoveta.png",
+#   width = 7,
+#   height = 4
+# )
 ```
 
 
+# References
 
+- Cheung, W. W. L.,*et al.*, 2009. Projecting global marine biodiversity impacts under climate change scenarios. Fish and Fisheries, 10 (3), 235–251.
 
+- Cheung, W. W. L.,*et al.*, 2016. Structural uncertainty in projecting global fisheries catches under climate change. Ecological Modelling, 325, 57–66.
 
+- Frölicher, T. *et al.*, 2016. Sources of uncertainties in 21st century projections of potential ocean ecosystem stressors. Global Biogeochemical Cycles [online], 30 (8), 1224–1243.
 
+- Tittensor, D. P., *et al.*, 2021. Next-generation ensemble projections reveal higher climate risks for marine ecosystems. Nature Climate Change, 11 (11), 973–981.
 
-	
