@@ -2,8 +2,10 @@
 title: "Data Outputs for Ocean Future Project"
 subtitle: "Juliano Palacios Abrantes & William W.L. Cheung"
 author: "Contact: j.palacios@oceans.ubc.ca"
-date: "2023-07-03"
+date: "2023-08-15"
 output: pdf_document
+editor_options: 
+  chunk_output_type: inline
 ---
 
 
@@ -271,7 +273,7 @@ Prepare data for running the protocol
 ```{r protocol_control_panel, eval = F, echo = F}
 
 # Get species list
-spp_list <- read_csv("../Data/project_spplist.csv")
+spp_list <- read_csv("./Data/project_spplist.csv")
 
 par_spp_list <- spp_list %>% 
   pull(taxon_key)
@@ -385,6 +387,214 @@ ggplot() +
 # )
 ```
 
+# Aggregated version
+
+The aggregated version is similar to the previous version with the exception that the results from all species is first aggregated by grid cell. This means that, for each ESM and SSP we first load each species data and aggregated the MCP of each gird cell from 1951 to 2100. After that, the steps are the same as before: first we estimated past and future MCP and then compute the % difference between these two.
+
+## Control panel
+
+Prepare data for running the protocol
+
+```{r agg_pannel, eval = F, echo = F}
+
+# List esm folders
+scenarios <- as.data.frame( list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T))
+colnames(scenarios) <- "path"
+
+paths <- scenarios %>%  pull(path)
+
+# Get species list
+spp_list <- read_csv("./Data/project_spplist.csv")
+
+par_spp_list <- spp_list %>% 
+  pull(taxon_key)
+
+to_read <- paste0(spp_list$taxon_key,"MCP.RData")
+```
+
+## Run protocol
+
+Run `agg_n_fx` across models
+
+```{r agg_protocol, eval = F, echo = F}
+
+
+for(m in 1:nrow(scen)){
+  
+  file_to_read <- paste0(paths[m],"/",to_read)
+  
+  for(i in 1:length(file_to_read)){
+    
+    load(file_to_read[i])
+    
+    # Transform it to df
+    
+    if(exists("sppMCPfnl", envir = .GlobalEnv) == TRUE){
+      
+      spp_data <- as.data.frame(sppMCPfnl) %>% 
+        rowid_to_column("index")
+      
+      colnames(spp_data) <- c("index",(seq(1951,2100,1)))
+      rm(sppMCPfnl) # remove data for computing power
+      
+    }else{
+      
+      spp_data <- as.data.frame(data) %>% 
+        rowid_to_column("index")
+      colnames(spp_data) <- c("index",(seq(1951,2100,1)))
+      rm(data) # remove data for computing power
+    }
+    
+    
+    partial_data <- spp_data %>% 
+      gather("year","value",`1951`:`2100`) 
+    
+    # Join data for all three models
+    if(i == 1){
+      complete_output <- partial_data
+    }else{
+      
+      complete_output <- left_join(complete_output,partial_data,
+                                   by = c("index","year")
+      ) %>% 
+        mutate_at(
+          .vars = c("value.x","value.y"),
+          .funs = replace_na,0
+        ) %>% 
+        mutate(sum_value = value.x + value.y) %>% 
+        select(index,year,value = sum_value)
+      
+    }
+    
+  } # close for loop in i for species
+  
+  
+  # Estimate historical MCP data for all species
+  early_data <- complete_output %>% 
+    mutate(period = ifelse(year < 2014 & year > 1995,"present",NA)) %>% 
+    filter(!is.na(period)) %>% 
+    left_join(regional_grid,
+              by = "index") %>%
+    filter(!is.na(eez_id)) %>%
+    group_by(eez_name,year,period) %>% 
+    # Sum total catch per eez per year
+    summarise(eez_catch = sum(value, na.rm = T),.groups = "drop") %>% 
+    group_by(eez_name,period) %>% 
+    # Average yearly data
+    summarise(mean_catch = mean(eez_catch,na.rm = T),.groups = "drop")
+  
+  # Estimate percentage change in future data for all species
+  future_data <-  complete_output %>% 
+    filter(year > 2004) %>% 
+    left_join(regional_grid,
+              by = "index") %>%
+    filter(!is.na(eez_id)) %>%
+    group_by(eez_name,year) %>% 
+    # Sum total catch per eez per year
+    summarise(eez_catch = sum(value, na.rm = T),.groups = "drop") %>% 
+    left_join(early_data,
+              by = "eez_name") %>%
+    # spread(period,mean_catch) %>% 
+    mutate(
+      per_change = ifelse(mean_catch == 0 & eez_catch > 0,100, 
+                          round((eez_catch-mean_catch)/mean_catch*100)
+      )
+    ) %>% 
+    filter(!is.na(per_change)) %>% 
+    select(eez_name,year,per_change) %>% 
+    mutate(
+      esm = unique(str_sub(file_to_read,79,82)),
+      ssp = unique(ifelse(str_sub(file_to_read,83,84) == 26,"ssp126","ssp585"))
+    )
+  
+  # Join data for all three models
+  if(m == 1){
+    models_output <- future_data
+  }else{
+    models_output <- bind_rows(models_output,future_data)
+  }
+} # close for loop in m for models
+
+
+# Average results per ESM
+final_output <- models_output %>% 
+  group_by(eez_name,year,ssp) %>% 
+  summarise(mean_per_change = mean(per_change, na.rm =T),
+            sd_per_change = sd(per_change, na.rm =T)) %>% 
+  group_by(eez_name,ssp) %>% 
+  mutate(
+    per_change_rm = round(zoo::rollmean(
+      mean_per_change,
+      k = 10, 
+      fill = NA, 
+      align = "right")
+    )
+  ) %>% 
+  filter(!is.na(per_change_rm))
+
+# Save data
+write_csv(final_output,
+          my_path("R",name = "aggregated_data.csv"))
+
+ 
+```
+
+
+## Results
+
+Structure of results is all the same except for the lack of a `species` column as these are all aggregated here.
+
+## Test results
+
+```{r test_agg_result, eval = T, echo = F}
+#  Note you need to run firt two chunks
+
+# Load result test
+agg_df <- my_path("R","ocean_future_projections",name = "aggregated_data.csv", read = T)
+
+head(agg_df)
+```
+
+
+```{r agg_plot, eval = T, echo = F}
+
+agg_df %>% 
+  filter(eez_name %in% c("Mexico (Pacific)","Mexico (Atlantic)","Peru","Chile")) %>% 
+  ggplot() +
+  geom_line(
+    aes(
+      x = as.numeric(year),
+      y = mean_per_change,
+      color = eez_name
+    )
+  ) +
+  geom_line(data = agg_df %>% filter(eez_name %in% c("Mexico (Pacific)","Mexico (Atlantic)","Peru","Chile")),
+            aes(
+              x = as.numeric(year),
+              y = per_change_rm,
+              group = eez_name
+            ),
+            color = "black"
+  ) +
+  geom_ribbon(data = agg_df %>% filter(eez_name %in% c("Mexico (Pacific)","Mexico (Atlantic)","Peru","Chile")),
+              aes(
+                x = as.numeric(year),
+                ymax = per_change_rm+sd_per_change,
+                ymin = per_change_rm-sd_per_change,
+                fill = eez_name
+              ),
+              alpha = 0.5
+  )  +
+  scale_color_viridis_d("EEZ") +
+  scale_fill_viridis_d("EEZ",) +
+  my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10) +
+  labs(
+    x= "Year",
+    y = "% Change Relative to Historical Value\n(All species aggregated)"
+  ) +
+  facet_wrap(~ssp)
+
+```
 
 # References
 
@@ -395,4 +605,3 @@ ggplot() +
 - Frölicher, T. *et al.*, 2016. Sources of uncertainties in 21st century projections of potential ocean ecosystem stressors. Global Biogeochemical Cycles [online], 30 (8), 1224–1243.
 
 - Tittensor, D. P., *et al.*, 2021. Next-generation ensemble projections reveal higher climate risks for marine ecosystems. Nature Climate Change, 11 (11), 973–981.
-
