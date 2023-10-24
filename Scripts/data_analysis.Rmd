@@ -20,7 +20,10 @@ packages <- c(
   "sp", #Spatial analysis 
   "rnaturalearth", # For maps
   "doParallel",
-  "foreach"
+  "foreach",
+  # For netcdf files
+  "ncdf4",
+  "metR"
 )
 
 my_lib(packages)
@@ -28,6 +31,45 @@ my_lib(packages)
 # Fix new updates of sf package
 sf::sf_use_s2(use_s2 = FALSE)
 ```
+
+
+```{r}
+track_time <- function(category = "day") {
+  
+  # Load/Create timesheet
+  path_to_read <- MyFunctions::my_path("D",name = "project_time_count.csv")
+  
+  if(category == "day"){
+    
+    start_time <- Sys.time()
+    message("Tracking time started.")
+    on.exit({
+      end_time <- Sys.time()
+      time_spent <- end_time - start_time
+      message("Time spent on the project:", time_spent)
+      
+      # Create time data frame
+      df <- data.frame(Start_Time = as.character(start_time), End_Time = as.character(end_time), Time_Spent = as.numeric(time_spent))
+      
+      if(file.exists(path_to_read)){
+        time_df <- dplyr::bind_rows(read.csv(path_to_read),
+                                    df)
+        
+      }else{
+        
+        time_df <- data.frame(Start_Time = start_time, End_Time = end_time, Time_Spent = time_spent)
+      }
+      
+      # Save the data frame to a file
+      write.csv(time_df, path_to_read, row.names =  F)  
+      
+    })
+  }
+}
+
+track_time()
+```
+
 
 # Overall
 
@@ -595,6 +637,198 @@ agg_df %>%
   facet_wrap(~ssp)
 
 ```
+
+
+## All Species porotocol
+
+### Get DBEM data 
+
+```{r get_dbem_data, eval = F, echo = F}
+
+
+# SAU index
+sau_index <- my_data("sau_index")
+
+dbem_index <- my_data("dbem_coords")
+
+
+cdf_to_csv <- function(file){
+  
+  
+  if(str_detect(file, "126")){
+    ssp <- "126"
+  }
+  
+  if(str_detect(file, "585")){
+    ssp <- "585"
+  }
+  
+  if(str_detect(file, "historical")){
+    ssp <- "historical"
+  }
+  
+  if(str_detect(file, "ipsl")){
+    esm <- "ipsl"
+  }else{
+    esm <- "gfdl"
+  }
+  
+  mem <- str_sub(file,81,84)
+  
+  
+  df_out <- ReadNetCDF(file) %>%
+    mutate(year = year(time)) %>% 
+    filter(year > 1994) %>% 
+    group_by(lat,lon,year) %>% 
+    summarise_at("tcb",
+                 mean,
+                 na.rm = T) %>% 
+    mutate(esm = esm,
+           mem = mem,
+           ssp = ssp)
+  
+  name <- paste0(my_path("R"),mem,"_",ssp,"_",esm,".csv")
+  write_csv(df_out,name)
+  
+}
+
+```
+
+
+### Load data
+
+```{r load_fishmip_data, eval = T, echo = F, message = F}
+
+ssp <- "585"
+
+
+
+# FishMip cmip6 data
+historical_list <- list.files(my_path("R"),full.names = T, pattern = "historical")
+
+hist_df <- bind_rows(
+  lapply(historical_list, read_csv)
+)
+
+model_list <- list.files(my_path("R"),full.names = T)[1:4]
+
+future_df <- bind_rows(
+  lapply(model_list, read_csv)
+  )
+
+
+all_models <- bind_rows(hist_df,future_df %>% mutate(ssp = as.character(ssp)))
+
+unique(all_models$mem)
+unique(all_models$ssp)
+
+# Joint all data needed
+
+models_df <- all_models %>% 
+  left_join(dbem_index, 
+            by = c("lat","lon")
+            ) %>% 
+  left_join(sau_index,
+            by = c("index")
+            ) %>% 
+  group_by(eez_name,esm,year,ssp) %>% 
+  summarise(tcb = sum(tcb, na.rm = T)) %>% 
+  filter(!is.na(eez_name))
+
+unique(models_df$ssp)
+length(unique(models_df$eez_name))
+
+```
+
+### Estimate prop. change
+
+```{r}
+
+# Estimate historical MCP data for all species
+early_data <- models_df %>% 
+  filter(ssp =="historical") %>% 
+  group_by(eez_name) %>% 
+  # Average yearly data
+  summarise(h_mean_tcb = mean(tcb,na.rm = T),.groups = "drop")
+
+# Estimate percentage change in future data for all species
+future_data <-  models_df %>% 
+  filter(ssp != "historical") %>% 
+  left_join(early_data,
+            by = c("eez_name")
+  ) %>%
+  # spread(period,mean_catch) %>% 
+  mutate(
+    per_change = ifelse(h_mean_tcb == 0 & tcb > 0,100, 
+                        round((tcb-h_mean_tcb)/h_mean_tcb*100)
+    )
+  ) %>% 
+  filter(!is.na(per_change)) %>% 
+  group_by(eez_name,year,ssp) %>% 
+  summarise(
+    mean_per_change = mean(per_change, na.rm =T),
+    sd_per_change = sd(per_change, na.rm =T)
+  ) %>% 
+  group_by(eez_name,ssp) %>% 
+  mutate(
+    per_change_rm = round(zoo::rollmean(
+      mean_per_change,
+      k = 10, 
+      fill = NA, 
+      align = "left")
+    )
+  ) %>% 
+  filter(!is.na(per_change_rm))
+
+# Save data
+write_csv(future_data,
+          my_path("R",name = "aggregated_data_all_spp.csv"))
+
+```
+
+### Test all species result
+
+```{r}
+
+future_data %>% 
+  filter(eez_name %in% c("Mexico (Pacific)","Mexico (Atlantic)","Peru","Chile")) %>% 
+  ggplot() +
+  geom_line(
+    aes(
+      x = as.numeric(year),
+      y = mean_per_change,
+      color = eez_name
+    )
+  ) +
+  geom_line(data = future_data %>% filter(eez_name %in% c("Mexico (Pacific)","Mexico (Atlantic)","Peru","Chile")),
+            aes(
+              x = as.numeric(year),
+              y = per_change_rm,
+              group = eez_name
+            ),
+            color = "black"
+  ) +
+  geom_ribbon(data = future_data %>% filter(eez_name %in% c("Mexico (Pacific)","Mexico (Atlantic)","Peru","Chile")),
+              aes(
+                x = as.numeric(year),
+                ymax = per_change_rm+sd_per_change,
+                ymin = per_change_rm-sd_per_change,
+                fill = eez_name
+              ),
+              alpha = 0.5
+  )  +
+  scale_color_viridis_d("EEZ") +
+  scale_fill_viridis_d("EEZ",) +
+  my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10) +
+  labs(
+    x= "Year",
+    y = "% Change Relative to Historical Value\n(All species aggregated)"
+  ) +
+  facet_wrap(~ssp)
+
+```
+
+
 
 # References
 
