@@ -9,17 +9,8 @@ output: html_document
 library(MyFunctions)
 
 packages <- c(
-  "readxl", # Read dataframe
-  "tidyverse", # for all data wrangling and ggplot
-  "janitor", # for data cleaning
-  "sf", #Spatial analysis 
-  "sp", #Spatial analysis 
-  "rnaturalearth", # For maps
-  "doParallel",
-  "foreach",
-  # For netcdf files
-  "ncdf4",
-  "metR"
+  "tidyverse",
+  "cowplot"
 )
 
 my_lib(packages)
@@ -71,7 +62,7 @@ g_guinea_sf <- sau_sf %>%
 
 ```{r}
 
-g_guinea %>% 
+g_guinea_line <- g_guinea %>% 
   ggplot() +
   # geom_line(
   #   aes(
@@ -110,7 +101,7 @@ g_guinea %>%
   ) +
   facet_wrap(~ssp)
 
-ggsave(plot = last_plot(),
+ggsave(plot = g_guinea_line,
        filename = my_path("R", "hotspot_report", name = "gulf_guinea_lines.png"),
        width = 8,
        height = 4
@@ -160,6 +151,33 @@ ggsave(plot = g_guinea_map,
        width = 8,
        height = 4
 )
+
+
+```
+
+### Pannel figure
+
+```{r}
+
+g_guinea_panel <-
+  ggdraw() +
+  draw_plot(g_guinea_map, x = 0, y = .50, height = .50, width = 1) +
+  draw_plot(g_guinea_line, x = 0, y = 0, height = .51, width = 1) +
+  draw_label('A', x = 0.002, y = .99, hjust = 0, vjust = 1, 
+             size = 10) +
+  draw_label('B', x = 0.002, y = .52, hjust = 0, vjust = 1, 
+             size = 10)
+
+
+
+ggsave(plot = g_guinea_panel,
+       filename = my_path("R", "hotspot_report", name = "gulf_guinea_panel.png"), 
+       width = 20,
+       height = 20, 
+       units = 'cm',
+       dpi = 300
+       )
+
 
 
 ```
