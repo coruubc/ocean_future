@@ -10,7 +10,9 @@ library(MyFunctions)
 
 packages <- c(
   "tidyverse",
-  "cowplot"
+  "cowplot",
+  "wesanderson",
+  "sf"
 )
 
 my_lib(packages)
@@ -62,6 +64,12 @@ g_guinea_sf <- sau_sf %>%
 
 ```{r}
 
+color_pallet <- c(
+  wes_palette("Darjeeling1",5),
+  wes_palette("Royal2",5)
+)
+
+
 g_guinea_line <- g_guinea %>% 
   ggplot() +
   # geom_line(
@@ -77,7 +85,8 @@ g_guinea_line <- g_guinea %>%
               y = per_change_rm,
               # group = eez_name,
               color = eez_name
-            )
+            ),
+            linewidth = 1.5
             # color = "black"
   ) +
   geom_ribbon(data = g_guinea,
@@ -89,8 +98,10 @@ g_guinea_line <- g_guinea %>%
               ),
               alpha = 0.3
   )  +
-  scale_color_viridis_d("Gulf of Guinea EEZ") +
-  scale_fill_viridis_d("Gulf of Guinea EEZ") +
+  # scale_color_viridis_d("Gulf of Guinea EEZ") +
+  # scale_fill_viridis_d("Gulf of Guinea EEZ") +
+  scale_color_manual(values = color_pallet) +
+  scale_fill_manual(values = color_pallet) +
   scale_y_continuous(limits =c(-100,50),
                      breaks = c(-100,-50,0,50)
   ) +
@@ -115,9 +126,13 @@ ggsave(plot = g_guinea_line,
 ```{r}
 
 g_guinea_2050 <- g_guinea %>% 
-  filter(year >= 2040 & year <= 2059) %>% 
+  filter(year >= 2020 & year <= 2039) %>% 
   group_by(name = eez_name, ssp) %>% 
   summarise(change = mean(mean_per_change))
+
+
+min_value <- round(min(g_guinea_2050$change,na.rm = T))
+max_value <- ceiling(max(g_guinea_2050$change,na.rm = T))
 
 
 g_guinea_map <- 
@@ -129,7 +144,8 @@ g_guinea_map <-
   geom_sf(aes(fill = change)) +
   geom_sf_label(aes(label = name, fill = change), size = 2, color = "white") +
   # scale_color_viridis_b("% Change Relative to Historical Value\n(All species aggregated)") +
-  scale_fill_viridis_b("% Change by 2050 Relative to Historical Value", limits = c(-80,-20),breaks = seq(-80,-20,10),
+  scale_fill_viridis_b("% Change by 2030 Relative to Historical Value", 
+                       limits = c(min_value,max_value),breaks = seq(min_value,max_value,10),
                            guide = guide_colorbar(title.position = "right", title.hjust = 0.5, barwidth = 1, barheight = 15)
                        ) +
   my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "right",facet_tx_s = "10") +
