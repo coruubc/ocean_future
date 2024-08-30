@@ -35,7 +35,7 @@ hotspot_data <- my_path("D", name= "hotspots_data.csv", read = T)
 # Sau map
 sau_sf <- my_sf("SAU")
 
-
+# 
 # as.data.frame(sau_sf) %>% select(name) %>% View()
 
 
@@ -611,27 +611,26 @@ print(unique(selected_hotspot$name))
 
 ```
 
-"The Gambia"      "Senegal"         "Guinea-Bissau"   "Guinea"          "Morocco (South)"
+"Solomon Isl."     "Papua New Guinea" "Vanuatu"     
 
-
-```{r wc_pacific_data, eval = T, echo = T}
+```{r melanesia_data, eval = T, echo = T}
 
 # Oceans future data
-wc_pacific <- future_data %>% 
+melanesia <- future_data %>% 
   filter(
     eez_name %in% selected_hotspot$eez_nam
   )
 
-length(unique(wc_pacific$eez_name))
+length(unique(melanesia$eez_name))
 
 # SAU shapefile data
-wc_pacific_sf <- sau_sf %>% 
+melanesia_sf <- sau_sf %>% 
   filter(
     name %in% selected_hotspot$name
   )
 
-print(wc_pacific_sf$name)
-length(unique(wc_pacific_sf$name))
+print(melanesia_sf$name)
+length(unique(melanesia_sf$name))
 
 
 ```
@@ -648,7 +647,7 @@ color_pallet <- c(
 )
 
 
-wc_pacific_line <- wc_pacific %>% 
+melanesia_line <- melanesia %>% 
   mutate(
     ymax = ifelse(per_change_rm+sd_per_change > 100,100,per_change_rm+sd_per_change),
     ymin = ifelse(per_change_rm-sd_per_change < -100, -100, per_change_rm-sd_per_change)
@@ -684,9 +683,9 @@ wc_pacific_line <- wc_pacific %>%
   # scale_fill_viridis_d("Gulf of Guinea EEZ") +
   scale_color_manual("EEZ", values = color_pallet) +
   scale_fill_manual("EEZ", values = color_pallet) +
-  scale_y_continuous(limits =c(-100,50),
-                     breaks = seq(-100,50,25),
-                     labels = c("< -100",seq(-75,25,25),"50")
+  scale_y_continuous(limits =c(-100,25),
+                     breaks = seq(-100,25,25),
+                     labels = c("< -100",seq(-75,0,25),"25")
                      
   ) +
   my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "bottom",facet_tx_s = "0") +
@@ -698,7 +697,7 @@ wc_pacific_line <- wc_pacific %>%
 
 line_name <- paste0(selected_hotspot$hotspot,"_lines.png")[1]
 
-ggsave(plot = wc_pacific_line,
+ggsave(plot = melanesia_line,
        filename = my_path("R", "hotspot_report", name = line_name),
        width = 8,
        height = 4
@@ -711,29 +710,33 @@ ggsave(plot = wc_pacific_line,
 
 ```{r}
 
-wc_pacific_2050 <- wc_pacific %>% 
+melanesia_2050 <- melanesia %>% 
   filter(year >= 2020 & year <= 2039) %>% 
   group_by(name = eez_name, ssp) %>% 
   summarise(change = mean(mean_per_change))
 
 
-min_value <- round(min(wc_pacific_2050$change,na.rm = T))
-max_value <- ceiling(max(wc_pacific_2050$change,na.rm = T))
+min_value <- round(min(melanesia_2050$change,na.rm = T))
+max_value <- ceiling(max(melanesia_2050$change,na.rm = T))
 
 
-wc_pacific_map <- 
-  wc_pacific_sf %>% 
-  left_join(wc_pacific_2050,
+melanesia_map <- 
+  melanesia_sf %>% 
+  left_join(melanesia_2050,
             by = "name") %>% 
   st_shift_longitude() %>% 
   ggplot() +
   my_land_map(fill = "grey80") +
   geom_sf(aes(fill = change)) +
   # geom_sf_label(aes(label = name, fill = change), size = 1.5, color = "grey50") +
-    ggrepel::geom_label_repel(aes(label = name, fill = change, geometry = geometry),
+    ggrepel::geom_label_repel(data = . %>% filter(name == "Vanuatu"),aes(label = name, fill = change, geometry = geometry),
                               stat = "sf_coordinates",
                               min.segment.length = 1,
-                              size = 2, color = "grey50") +
+                              size = 2, color = "black") +
+  ggrepel::geom_label_repel(data = . %>% filter(name != "Vanuatu"),aes(label = name, fill = change, geometry = geometry),
+                              stat = "sf_coordinates",
+                              min.segment.length = 1,
+                              size = 2, color = "white") +
   scale_fill_viridis_b("% Change by 2030 Relative to Historical Value", 
                        limits = c(min_value,max_value),breaks = seq(min_value,max_value,6),
                            guide = guide_colorbar(title.position = "right", title.hjust = 0.5, barwidth = 1, barheight = 15)
@@ -744,8 +747,8 @@ wc_pacific_map <-
     x= "Longitude",
     y = "Latitude"
   ) +
-  coord_sf(xlim = c(130,210),
-           ylim = c(-30,20)
+  coord_sf(xlim = c(130,180),
+           ylim = c(-30,5)
            ) +
   facet_wrap(~ssp,
   labeller = labeller(ssp = c("126" = "SSP1-2.6",
@@ -754,7 +757,7 @@ wc_pacific_map <-
 
 map_name <- paste0(selected_hotspot$hotspot,"_map.png")[1]
 
-ggsave(plot = wc_pacific_map,
+ggsave(plot = melanesia_map,
        filename = my_path("R", "hotspot_report", name = map_name),
        width = 8,
        height = 4
@@ -767,10 +770,10 @@ ggsave(plot = wc_pacific_map,
 
 ```{r}
 
-wc_pacific_panel <-
+melanesia_panel <-
   ggdraw() +
-  draw_plot(wc_pacific_map, x = 0, y = .50, height = .50, width = 1) +
-  draw_plot(wc_pacific_line, x = 0, y = 0, height = .51, width = 1) +
+  draw_plot(melanesia_map, x = 0, y = .50, height = .50, width = 1) +
+  draw_plot(melanesia_line, x = 0, y = 0, height = .51, width = 1) +
   draw_label('A', x = 0.002, y = .99, hjust = 0, vjust = 1, 
              size = 10) +
   draw_label('B', x = 0.002, y = .52, hjust = 0, vjust = 1, 
@@ -780,7 +783,7 @@ wc_pacific_panel <-
 
 panel_name <- paste0(selected_hotspot$hotspot,"_panel.jpg")[1] 
 
-ggsave(plot = wc_pacific_panel,
+ggsave(plot = melanesia_panel,
        filename = my_path("R", "hotspot_report", name =panel_name), 
        width = 20,
        height = 20, 
