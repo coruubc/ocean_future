@@ -537,10 +537,16 @@ wc_pacific_map <-
   my_land_map(fill = "grey80") +
   geom_sf(aes(fill = change)) +
   # geom_sf_label(aes(label = name, fill = change), size = 1.5, color = "grey50") +
-    ggrepel::geom_label_repel(aes(label = name, fill = change, geometry = geometry),
+    ggrepel::geom_label_repel(data = . %>% filter(name %in% c("Palau")),
+                              aes(label = name, fill = change, geometry = geometry),
                               stat = "sf_coordinates",
                               min.segment.length = 1,
-                              size = 2, color = "grey50") +
+                              size = 2, color = "white") +
+  ggrepel::geom_label_repel(data = . %>% filter(!name %in% c("Palau")),
+                            aes(label = name, fill = change, geometry = geometry),
+                              stat = "sf_coordinates",
+                              min.segment.length = 1,
+                              size = 2, color = "black") +
   scale_fill_viridis_b("% Change by 2030 Relative to Historical Value", 
                        limits = c(min_value,max_value),breaks = seq(min_value,max_value,6),
                            guide = guide_colorbar(title.position = "right", title.hjust = 0.5, barwidth = 1, barheight = 15)
