@@ -2832,4 +2832,197 @@ ggsave(plot = poland_panel,
 
 
 ```
-\
+
+## Mozambique
+
+```{r}
+
+selected_hotspot <- hotspot_data %>% 
+  filter(hotspot == "Mozambique")
+
+print(unique(selected_hotspot$name))
+
+```
+
+[1] "Mozambique"
+
+
+```{r mozambique_data, eval = T, echo = T}
+
+# Oceans future data
+mozambique <- future_data %>% 
+  filter(
+    eez_name %in% selected_hotspot$eez_nam
+  )
+
+length(unique(mozambique$eez_name))
+
+# SAU shapefile data
+mozambique_sf <- sau_sf %>% 
+  filter(
+    name %in% selected_hotspot$name
+  )
+
+print(mozambique_sf$name)
+length(unique(mozambique_sf$name))
+
+
+```
+
+### Line plot
+
+```{r}
+
+color_pallet <- c(
+  wes_palette("Darjeeling1",5),
+  wes_palette("Royal2",5),
+  "grey"
+)
+
+
+mozambique_line <- mozambique %>% 
+  mutate(
+    ymax = ifelse(per_change_rm+sd_per_change > 100,100,per_change_rm+sd_per_change),
+    ymin = ifelse(per_change_rm-sd_per_change < -100, -100, per_change_rm-sd_per_change)
+  ) %>% 
+  ggplot() +
+  # geom_line(
+  #   aes(
+  #     x = as.numeric(year),
+  #     y = mean_per_change,
+  #     color = eez_name
+  #   )
+  # ) +
+  geom_line(
+            aes(
+              x = as.numeric(year),
+              y = per_change_rm,
+              # group = eez_name,
+              color = eez_name
+            ),
+            linewidth = 1.5
+            # color = "black"
+  ) +
+  geom_ribbon(
+              aes(
+                x = as.numeric(year),
+                ymax = ymax,
+                ymin = ymin,
+                fill = eez_name
+              ),
+              alpha = 0.3
+  )  +
+  # scale_color_viridis_d("Gulf of Guinea EEZ") +
+  # scale_fill_viridis_d("Gulf of Guinea EEZ") +
+  scale_color_manual("EEZ", values = color_pallet) +
+  scale_fill_manual("EEZ", values = color_pallet) +
+  scale_y_continuous(limits =c(-25,25),
+                     breaks = seq(-25,25,5),
+                     # labels = c("< -100",seq(-75,75,25),"100")
+                     
+  ) +
+  my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "bottom",facet_tx_s = "0") +
+  labs(
+    x= "Year",
+    y = "% Change Relative to Historical Value\n(All species aggregated)"
+  ) +
+  facet_wrap(~ssp)
+
+line_name <- paste0(selected_hotspot$hotspot,"_lines.png")[1]
+
+ggsave(plot = mozambique_line,
+       filename = my_path("R", "hotspot_report", name = line_name),
+       width = 8,
+       height = 4
+)
+
+```
+
+
+### Map figure
+
+```{r}
+
+mozambique_2050 <- mozambique %>% 
+  filter(year >= 2020 & year <= 2039) %>% 
+  group_by(name = eez_name, ssp) %>% 
+  summarise(change = mean(mean_per_change)) %>% 
+  mutate(name = ifelse(name == "Viet Nam", "Vietnam",name))
+
+
+min_value <- round(min(mozambique_2050$change,na.rm = T))
+max_value <- ceiling(max(mozambique_2050$change,na.rm = T))
+
+
+min_x <- floor(st_bbox(mozambique_sf)[1])
+max_x <- ceiling(st_bbox(mozambique_sf)[3])
+min_y <- floor(st_bbox(mozambique_sf)[2])
+max_y <- ceiling(st_bbox(mozambique_sf)[4])
+
+
+mozambique_map <- 
+  mozambique_sf %>% 
+  left_join(mozambique_2050,
+            by = "name") %>% 
+  # st_shift_longitude() %>% 
+  ggplot() +
+  my_land_map(fill = "grey80") +
+  geom_sf(aes(fill = change)) +
+  scale_fill_viridis_b("% Change by 2030 Relative to Historical Value", 
+                       limits = c(min_value,max_value),breaks = seq(min_value,max_value,1),
+                           guide = guide_colorbar(title.position = "right", title.hjust = 0.5)
+                       ) +
+  my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "right",facet_tx_s = "10") +
+  theme(legend.title = element_text(angle = 270, vjust = 0.5, hjust = 0.5))+
+  labs(
+    x= "Longitude",
+    y = "Latitude"
+  ) +
+  coord_sf(xlim = c(min_x,max_x),
+           ylim = c(min_y,max_y)
+           ) +
+  facet_wrap(~ssp,
+  labeller = labeller(ssp = c("126" = "SSP1-2.6",
+  "585" = "SSP5-8.5"))
+  )
+
+map_name <- paste0(selected_hotspot$hotspot,"_map.png")[1]
+
+ggsave(plot = mozambique_map,
+       filename = my_path("R", "hotspot_report", name = map_name),
+       width = 8,
+       height = 4
+)
+
+
+```
+
+### Pannel figure
+
+```{r}
+
+mozambique_panel <-
+  ggdraw() +
+  draw_plot(mozambique_map, x = 0, y = .50, height = .50, width = 1) +
+  draw_plot(mozambique_line, x = 0, y = 0, height = .51, width = 1) +
+  draw_label('A', x = 0.002, y = .99, hjust = 0, vjust = 1, 
+             size = 10) +
+  draw_label('B', x = 0.002, y = .52, hjust = 0, vjust = 1, 
+             size = 10)
+
+
+
+panel_name <- paste0(selected_hotspot$hotspot,"_panel.jpg")[1] 
+
+ggsave(plot = mozambique_panel,
+       filename = my_path("R", "hotspot_report", name =panel_name), 
+       width = 20,
+       height = 20, 
+       units = 'cm',
+       dpi = 300
+       )
+
+
+
+
+```
