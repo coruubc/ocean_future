@@ -2019,3 +2019,213 @@ ggsave(plot = se_asia_panel,
 
 
 ```
+
+## Indonesia
+
+```{r}
+
+selected_hotspot <- hotspot_data %>% 
+  filter(hotspot == "Indonesia")
+
+print(unique(selected_hotspot$name))
+
+```
+
+[1] "Indonesia (Central)" "Indonesia (Eastern)"
+
+
+```{r indonesia_data, eval = T, echo = T}
+
+# Oceans future data
+indonesia <- future_data %>% 
+  filter(
+    eez_name %in% selected_hotspot$eez_nam
+  )
+
+length(unique(indonesia$eez_name))
+
+# SAU shapefile data
+indonesia_sf <- sau_sf %>% 
+  filter(
+    name %in% selected_hotspot$name
+  )
+
+print(indonesia_sf$name)
+length(unique(indonesia_sf$name))
+
+
+```
+
+
+### Line plot
+
+```{r}
+
+color_pallet <- c(
+  wes_palette("Darjeeling1",5),
+  wes_palette("Royal2",5),
+  "grey"
+)
+
+
+indonesia_line <- indonesia %>% 
+  mutate(
+    ymax = ifelse(per_change_rm+sd_per_change > 100,100,per_change_rm+sd_per_change),
+    ymin = ifelse(per_change_rm-sd_per_change < -100, -100, per_change_rm-sd_per_change)
+  ) %>% 
+  ggplot() +
+  # geom_line(
+  #   aes(
+  #     x = as.numeric(year),
+  #     y = mean_per_change,
+  #     color = eez_name
+  #   )
+  # ) +
+  geom_line(
+            aes(
+              x = as.numeric(year),
+              y = per_change_rm,
+              # group = eez_name,
+              color = eez_name
+            ),
+            linewidth = 1.5
+            # color = "black"
+  ) +
+  geom_ribbon(
+              aes(
+                x = as.numeric(year),
+                ymax = ymax,
+                ymin = ymin,
+                fill = eez_name
+              ),
+              alpha = 0.3
+  )  +
+  # scale_color_viridis_d("Gulf of Guinea EEZ") +
+  # scale_fill_viridis_d("Gulf of Guinea EEZ") +
+  scale_color_manual("EEZ", values = color_pallet) +
+  scale_fill_manual("EEZ", values = color_pallet) +
+  scale_y_continuous(limits =c(-100,60),
+                     breaks = seq(-100,60,30),
+                     labels = c("< -100",seq(-70,30,30),"60")
+                     
+  ) +
+  my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "bottom",facet_tx_s = "0") +
+  labs(
+    x= "Year",
+    y = "% Change Relative to Historical Value\n(All species aggregated)"
+  ) +
+  facet_wrap(~ssp)
+
+line_name <- paste0(selected_hotspot$hotspot,"_lines.png")[1]
+
+ggsave(plot = indonesia_line,
+       filename = my_path("R", "hotspot_report", name = line_name),
+       width = 8,
+       height = 4
+)
+
+```
+
+
+### Map figure
+
+```{r}
+
+indonesia_2050 <- indonesia %>% 
+  filter(year >= 2020 & year <= 2039) %>% 
+  group_by(name = eez_name, ssp) %>% 
+  summarise(change = mean(mean_per_change)) %>% 
+  mutate(name = ifelse(name == "Viet Nam", "Vietnam",name))
+
+
+min_value <- round(min(indonesia_2050$change,na.rm = T))
+max_value <- ceiling(max(indonesia_2050$change,na.rm = T))
+
+
+min_x <- floor(st_bbox(indonesia_sf)[1])
+max_x <- ceiling(st_bbox(indonesia_sf)[3])
+min_y <- floor(st_bbox(indonesia_sf)[2])
+max_y <- ceiling(st_bbox(indonesia_sf)[4])
+
+
+indonesia_map <- 
+  indonesia_sf %>% 
+  left_join(indonesia_2050,
+            by = "name") %>% 
+  # st_shift_longitude() %>% 
+  ggplot() +
+  my_land_map(fill = "grey80") +
+  geom_sf(aes(fill = change)) +
+  # geom_sf_label(aes(label = name, fill = change), size = 1.5, color = "grey50") +
+    ggrepel::geom_label_repel(data = . %>% filter(ssp %in% c("585")),
+                              aes(label = name, fill = change, geometry = geometry),
+                              stat = "sf_coordinates",
+                              min.segment.length = 1,
+                              size = 2, color = "white") +
+  ggrepel::geom_label_repel(data = . %>% filter(ssp %in% c("126")),
+                            aes(label = name, fill = change, geometry = geometry),
+                              stat = "sf_coordinates",
+                              min.segment.length = 1,
+                              size = 2, color = "black") +
+  scale_fill_viridis_b("% Change by 2030 Relative to Historical Value", 
+                       limits = c(min_value,max_value),breaks = seq(min_value,max_value,1),
+                           guide = guide_colorbar(title.position = "top")
+                       ) +
+  my_ggtheme_m(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "bottom",leg_width = 4, leg_aline = 0.5) +
+  theme(strip.text = element_text(size = 10, colour = "black")) +
+  # theme(legend.title = element_text(angle = 270, vjust = 0.5, hjust = 0.5))+
+  labs(
+    x= "Longitude",
+    y = "Latitude"
+  ) +
+  # coord_sf(xlim = c(107,134),
+  #          ylim = c(3,40)
+  #          ) +
+  coord_sf(xlim = c(min_x,max_x),
+           ylim = c(min_y,max_y)
+           ) +
+  facet_wrap(~ssp,
+  labeller = labeller(ssp = c("126" = "SSP1-2.6",
+  "585" = "SSP5-8.5"))
+  )
+
+map_name <- paste0(selected_hotspot$hotspot,"_map.png")[1]
+
+ggsave(plot = indonesia_map,
+       filename = my_path("R", "hotspot_report", name = map_name),
+       width = 8,
+       height = 4
+)
+
+
+```
+
+### Pannel figure
+
+```{r}
+
+indonesia_panel <-
+  ggdraw() +
+  draw_plot(indonesia_map, x = 0, y = .50, height = .50, width = 1) +
+  draw_plot(indonesia_line, x = 0, y = 0, height = .51, width = 1) +
+  draw_label('A', x = 0.002, y = .99, hjust = 0, vjust = 1, 
+             size = 10) +
+  draw_label('B', x = 0.002, y = .52, hjust = 0, vjust = 1, 
+             size = 10)
+
+
+
+panel_name <- paste0(selected_hotspot$hotspot,"_panel.jpg")[1] 
+
+ggsave(plot = indonesia_panel,
+       filename = my_path("R", "hotspot_report", name =panel_name), 
+       width = 20,
+       height = 20, 
+       units = 'cm',
+       dpi = 300
+       )
+
+
+
+
+```
