@@ -40,6 +40,75 @@ sau_sf <- my_sf("SAU")
 
 
 ```
+## All together
+
+```{r}
+
+selected_hotspot <- hotspot_data
+
+all_sf <- sau_sf %>% 
+  filter(
+    name %in% selected_hotspot$name
+  )
+
+all_future_data <- future_data %>% 
+  filter(
+    eez_name %in% selected_hotspot$eez_name
+  )
+
+
+```
+
+### Map figure
+
+```{r}
+
+all_2050 <- all_future_data %>% 
+  filter(year >= 2020 & year <= 2039) %>% 
+  group_by(name = eez_name, ssp) %>% 
+  summarise(change = mean(mean_per_change)) %>% 
+  mutate(name = ifelse(name == "Viet Nam", "Vietnam",name))
+
+
+min_value <- round(min(all_2050$change,na.rm = T))
+max_value <- ceiling(max(all_2050$change,na.rm = T))
+map_name <- paste0("all_hotspots_map.png")
+
+
+all_map <- 
+  all_sf %>% 
+  left_join(all_2050,
+            by = "name") %>% 
+  # st_shift_longitude() %>%
+  ggplot() +
+  my_land_map(fill = "grey80") +
+  geom_sf(aes(fill = change)) +
+  scale_fill_viridis_b("% Change by 2030 Relative to Historical Value", 
+                       limits = c(min_value,max_value),
+                       breaks = seq(min_value,max_value,10),
+                       guide = guide_colorbar(title.position = "top")
+                       ) +
+  my_ggtheme_m(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "bottom",leg_width = 4, leg_aline = 0.5) +
+  theme(strip.text = element_text(size = 10, colour = "black")) +
+  labs(
+    x= "Longitude",
+    y = "Latitude"
+  ) +
+  facet_wrap(~ssp,
+  labeller = labeller(ssp = c("126" = "SSP1-2.6",
+  "585" = "SSP5-8.5"))
+  )
+
+
+
+ggsave(plot = all_map,
+       filename = my_path("R", "hotspot_report", name = map_name),
+       width = 12,
+       height = 6
+)
+
+
+```
 
 ## Gulf of Guinea
 
@@ -455,11 +524,21 @@ color_pallet <- c(
 )
 
 
+
+
 wc_pacific_line <- wc_pacific %>% 
   mutate(
     ymax = ifelse(per_change_rm+sd_per_change > 100,100,per_change_rm+sd_per_change),
-    ymin = ifelse(per_change_rm-sd_per_change < -100, -100, per_change_rm-sd_per_change)
+    ymin = ifelse(per_change_rm-sd_per_change < -100, -100, per_change_rm-sd_per_change),
+    eez_name = ifelse(str_detect(eez_name,"Kiribati"),"Kiribati",
+                      ifelse(str_detect(eez_name,"Tokelau"),"Tokelau",
+                             ifelse(str_detect(eez_name,"Micronesia"),"Micronesia",
+                                           eez_name
+                                    )
+                             )
+                      )
   ) %>% 
+  # View()
   ggplot() +
   # geom_line(
   #   aes(
@@ -496,19 +575,21 @@ wc_pacific_line <- wc_pacific %>%
                      labels = c("< -100",seq(-75,25,25),"50")
                      
   ) +
-  my_ggtheme_p(ax_tx_s = 9,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "bottom",facet_tx_s = "0") +
+  my_ggtheme_p(ax_tx_s = 7,ax_tl_s = 10,leg_tl_s = 10,leg_tx_s = 10,leg_pos = "",facet_tx_s = "8",x_vjust = 0.5,axx_tx_ang = 45) +
   labs(
     x= "Year",
     y = "% Change Relative to Historical Value\n(All species aggregated)"
   ) +
-  facet_wrap(~ssp)
+  facet_grid(ssp~eez_name,
+             labeller = labeller(ssp = c("126" = "SSP1-2.6",
+  "585" = "SSP5-8.5")))
 
-line_name <- paste0(selected_hotspot$hotspot,"_lines.png")[1]
+line_name <- paste0(selected_hotspot$hotspot,"_lines_facet.png")[1]
 
 ggsave(plot = wc_pacific_line,
        filename = my_path("R", "hotspot_report", name = line_name),
-       width = 8,
-       height = 4
+       width = 12,
+       height = 5
 )
 
 ```
@@ -569,8 +650,8 @@ map_name <- paste0(selected_hotspot$hotspot,"_map.png")[1]
 
 ggsave(plot = wc_pacific_map,
        filename = my_path("R", "hotspot_report", name = map_name),
-       width = 8,
-       height = 4
+       width = 10,
+       height = 5
 )
 
 
@@ -595,13 +676,11 @@ panel_name <- paste0(selected_hotspot$hotspot,"_panel.jpg")[1]
 
 ggsave(plot = wc_pacific_panel,
        filename = my_path("R", "hotspot_report", name =panel_name), 
-       width = 20,
+       width = 25,
        height = 20, 
        units = 'cm',
        dpi = 300
        )
-
-
 
 
 ```
@@ -3625,7 +3704,6 @@ print(unique(selected_hotspot$name))
 ```
 
 Canada (Arctic)
-
 
 ```{r mex_data, eval = T, echo = T}
 
