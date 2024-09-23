@@ -10,6 +10,7 @@ editor_options:
 
 
 ```{r setup, results='hide', message=FALSE, echo = F}
+
 library(MyFunctions)
 
 packages <- c(
@@ -99,6 +100,11 @@ Climate change projections for the following species were requested to be used i
   - *Engraulis ringens*
 
 
+## Extra species
+
+- *Scomber scombrus*
+- *Gadus chalcogrammus*
+
 <!-- ## Get EEZs -->
 
 ```{r select_eezs, eval = F, echo = F}
@@ -146,18 +152,21 @@ Here we filter our model runs to the selected species. There are eight species i
 
 exploited_species_list <- read_csv("~/Library/CloudStorage/OneDrive-UBC/Data/Species/exploited_species_list.csv")
 
-spp_selected <- c("Thunnus albacares",
-                  "Katsuwonus pelamis",
-                  "Engraulis albidus",
-                  "Engraulis anchoita",
-                  "Engraulis australis",
-                  "Engraulis capensis ",
-                  "Engraulis encrasicolus",
-                  "Engraulis eurystole",
-                  "Engraulis japonicus",
-                  "Engraulis mordax",
-                  "Engraulis ringens",
-                  "Gadus macrocephalus"
+spp_selected <- c(
+  # "Thunnus albacares",
+                  # "Katsuwonus pelamis",
+                  # "Engraulis albidus",
+                  # "Engraulis anchoita",
+                  # "Engraulis australis",
+                  # "Engraulis capensis ",
+                  # "Engraulis encrasicolus",
+                  # "Engraulis eurystole",
+                  # "Engraulis japonicus",
+                  # "Engraulis mordax",
+                  # "Engraulis ringens",
+                  # "Gadus macrocephalus",
+                  "Scomber scombrus",
+                  "Theragra chalcogramma"
                   )
 
 
@@ -194,7 +203,8 @@ mainfx <- function(taxon){
   
   
   # List esm folders
-  scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)
+  scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)[-3]
+  
   to_read <- paste0(taxon,"MCP.RData")
   
   for(m in 1:6){
@@ -301,7 +311,7 @@ mainfx <- function(taxon){
     name <- paste0(spp_name,".csv")
     
     write_csv(final_output,
-              my_path("R","Raw",name))
+              my_path("R","ocean_future_projections",name))
     
     
 } # Close function
@@ -315,7 +325,7 @@ Prepare data for running the protocol
 ```{r protocol_control_panel, eval = F, echo = F}
 
 # Get species list
-spp_list <- read_csv("./Data/project_spplist.csv")
+# spp_list <- read_csv("./Data/project_spplist.csv")
 
 par_spp_list <- spp_list %>% 
   pull(taxon_key)
@@ -350,7 +360,7 @@ Run `mainfx` across species
 # gc()
 
 suppressWarnings(
-lapply(par_spp_list[3], mainfx)
+lapply(par_spp_list, mainfx)
 )
 ```
 
