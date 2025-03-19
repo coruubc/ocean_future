@@ -1,0 +1,294 @@
+---
+title: "Data for Jessica G. on Trade Analysis"
+author: "Juliano Palacios-Abrantes"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, results='hide', message=FALSE, echo = F}
+
+library(MyFunctions)
+
+packages <- c(
+  "readxl", # Read dataframe
+  "tidyverse", # for all data wrangling and ggplot
+  "janitor", # for data cleaning
+  "sf", #Spatial analysis 
+  "sp", #Spatial analysis 
+  "rnaturalearth", # For maps
+  "doParallel",
+  "foreach",
+  # For netcdf files
+  "ncdf4",
+  "metR",
+  "readr",
+  "taxize"
+)
+
+my_lib(packages)
+
+# Fix new updates of sf package
+sf::sf_use_s2(use_s2 = FALSE)
+```
+
+# Overall
+
+Based on your suggestions I will work in the following three approaches to average of the species that we have information for within the higher taxa within:
+
+1- All the species captured in the EEZ 2- Captured in the EEZ weighted by capture tonnage 3- Captured within the a large marine ecosystem (LME). I think this would be more straightforward than making a step-by-step expansion across EEZs
+
+# 1 All the species captured in the EEZ
+
+## Data
+
+```{r}
+
+# SAU Catch Data 
+
+# SAUCatch_FE_EEZ_FAO_taxa_sector_29May2020 
+sau_catch <- read_csv("~/Library/CloudStorage/OneDrive-UBC/Data/sau/catch_data/SAUCatch_FE_EEZ_FAO_taxa_sector_29May2020.csv")
+
+
+# Jessica's species list
+# artis_spp <- my_path("D","jg","jessica_sau_taxa.csv", read = T) %>% 
+#   rename(
+#          a_common_name = common_name,
+#          a_genus = genus) %>% 
+#   mutate(taxon_name = str_to_sentence(sci_name)) %>% 
+#   left_join(sau_spp)
+
+# DBEM species list
+dbem_spp <- my_data("dbem_species") %>% 
+  mutate(dbem = 1)
+
+# dbem_catch <- sau_catch %>% 
+#   filter(taxon_key %in% dbem_spp$taxon_key)
+
+
+# SAU spp list
+sau_spp <- my_path("Species","updated_data/sau_updated_data/","TaxonNom_v42.1_151113.xlsx", read = T) %>% 
+  left_join(dbem_spp)
+
+```
+
+## Get all species catched by EEZ
+
+```{r}
+
+# Get SAU taxon per EEZ
+sau_taxon_eez <- sau_catch %>% 
+  group_by(eezid,taxon_key) %>% 
+  tally() %>% 
+  select(-n) %>% 
+  left_join(sau_spp)
+
+# Get taxon at the genus level
+genus_taxon <- sau_taxon_eez %>% 
+  filter(is.na(dbem)) %>% 
+  group_by(eezid,genus) %>% 
+  tally() %>% 
+  left_join(dbem_spp)
+  
+# Missing genus
+genus_taxon_missing <- sau_taxon_eez %>% 
+  filter(is.na(dbem)) 
+
+genus_taxon_missing_list <- genus_taxon_missing %>% 
+  pull(taxon_name) %>% 
+  unique()
+  
+
+```
+
+# Matching genus overall
+
+First we get SAU species that are not on the DBEM
+
+```{r}
+
+sau_taxon <- sau_catch %>% 
+  group_by(taxon_key) %>% 
+  tally() %>% 
+  select(-n) %>% 
+  left_join(sau_spp)
+
+sau_taxon
+```
+
+
+```{r}
+
+# Get sau SPP not in the DBEM at the genus level
+sau_genus <- sau_taxon %>% 
+  filter(is.na(dbem),
+         !is.na(genus)) %>% 
+  group_by(genus) %>% 
+  tally() %>% 
+  rename(n_spp = n)
+
+dbem_genus <- sau_taxon %>% 
+  filter(!is.na(dbem))
+
+dbem_genus
+  
+```
+
+Match those with the existing ones in the DBEM
+
+```{r}
+
+sau_dbem_genus <- sau_genus %>% 
+  left_join(dbem_spp)
+
+
+# for matching species
+sau_genus_matching <-
+  sau_taxon %>% 
+  filter(is.na(dbem),
+         !is.na(genus)) %>% 
+  select(taxon_name_sau = taxon_name,
+         taxon_key_sau = taxon_key,
+         genus) %>% 
+  left_join(dbem_spp) %>% 
+  filter(!is.na(dbem)) 
+  
+```
+
+There are still 287 genera that have not match with the DBEM these are... 
+
+```{r}
+
+sau_missing_gen <- sau_dbem_genus %>% 
+  filter(is.na(dbem)) %>% 
+  group_by(genus) %>% 
+  tally()
+  
+sau_missing_gen
+
+```
+
+# Matching family overall
+
+For those missing, we can match them at the family level... 
+
+```{r}
+
+sau_missing_fam <- sau_taxon %>% 
+  filter(genus %in% sau_missing_gen$genus | is.na(genus))
+
+
+sau_missing_fam_taxon <- sau_missing_fam %>% 
+  filter(!is.na(taxon_name)) %>% 
+  pull(taxon_name) %>% 
+  unique()
+
+
+# Get Family level for missing genus
+class_fam_sau <- classification(sau_missing_fam_taxon, 
+                           db = "worms",
+                           best_match_only = TRUE,
+                           ask = F) 
+
+# Convert the list to a data frame
+class_fam_sau_df <- map_dfr(class_fam_sau, ~as_tibble(.x), .id = "query") %>% 
+  filter(rank == "Family") %>%
+  # View()
+  select(family = name,
+         taxon_name = query)
+
+# Get Family level for dbem
+class_dbem <- classification(dbem_spp$taxon_name, 
+                           db = "worms",
+                           best_match_only = TRUE,
+                           ask = F) 
+
+# Convert the list to a data frame
+calss_dbem_df <- map_dfr(class_dbem, ~as_tibble(.x), .id = "query") %>% 
+  filter(rank == "Family") %>% 
+  select(family = name,
+         taxon_name = query) %>% 
+  left_join(dbem_spp, "taxon_name")
+
+```
+
+Now we match the missing families together
+
+```{r}
+#Merge the families
+sau_dbem_family <- class_fam_sau_df %>% 
+  rename(taxon_name_sau = taxon_name) %>% 
+  left_join(calss_dbem_df) %>% 
+  filter(!is.na(dbem))
+  
+```
+
+There are still about 183 missing taxa at the family level.
+
+```{r}
+#Merge the families
+class_fam_sau_df %>% 
+  rename(taxon_name_sau = taxon_name) %>% 
+  left_join(calss_dbem_df) %>% 
+  filter(is.na(dbem)) %>% 
+  pull(taxon_name_sau) %>% 
+  unique()
+  
+```
+
+
+# Combine final data
+
+DBEM column identifies the level of matching (`dbem_source`)
+1 = species level (n = 915)
+2 = genus level (n = 357)
+3 = family level (n = 360)
+NA = no match (n = 277)
+
+```{r}
+sau_taxon %>% 
+  # mutate(dbem_g = ifelse(is.na(dbem) & genus %in% dbem_spp$genus,2,NA),
+         # dbem_f = ifelse(is.na(dbem) & taxon_name %in% sau_dbem_family$taxon_name_sau,3,NA)
+  # ) %>%
+  mutate(dbem_source = 
+                              ifelse(is.na(dbem) & genus %in% dbem_spp$genus,2,
+                                     ifelse(is.na(dbem) & taxon_name %in% sau_dbem_family$taxon_name_sau,3,
+                                            ifelse(dbem == 1, 1,NA)
+                             )
+  )
+  ) %>% 
+  select(1:4,dbem_source) %>% 
+  filter(!is.na(taxon_name)) %>% 
+  # View()
+  # write_csv("sau_general_dbem_source.csv")
+  group_by(dbem_source) %>% 
+  tally()
+
+  
+```
+
+# Species - Genus relation data
+
+```{r}
+
+sub_df <- bind_rows(
+  # Species to substitute at the genus level
+  sau_genus_matching %>% mutate(dbem = 2) %>% select(taxon_name_sau,taxon_key_sau,taxon_name_dbem = taxon_name,taxon_key_dbem = taxon_key,dbem),
+  # Species to substitute at the family level
+  sau_dbem_family %>% select(taxon_name = taxon_name_sau,taxon_name_dbem = taxon_name,taxon_key_dbem = taxon_key) %>% left_join(sau_taxon) %>% 
+    select(taxon_name_sau =taxon_name,taxon_key_sau = taxon_key,taxon_name_dbem,taxon_key_dbem) %>% 
+    mutate(dbem = 3),
+  # # Species at the species level
+  sau_taxon %>% select(taxon_name_sau = taxon_name,taxon_key) %>% left_join(dbem_spp) %>% filter(dbem == 1) %>% select(taxon_name_sau,taxon_key_sau = taxon_key, taxon_name_dbem= taxon_name,dbem) %>% mutate(taxon_key_dbem = taxon_key_sau)
+)
+
+length(unique(sub_df$taxon_name_sau)) # 1632 taxa
+length(unique(sau_taxon$taxon_name)) # 1910 taxa
+
+# 1910-1632 = 278 missing
+
+
+write_csv(sub_df,
+          "sau_taxa_to_genus_family.csv")
+
+```
+
