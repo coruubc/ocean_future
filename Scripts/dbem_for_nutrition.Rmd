@@ -1,0 +1,229 @@
+---
+title: "Data for Julia on Nutritional Analysis"
+author: "Juliano Palacios-Abrantes"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, results='hide', message=FALSE, echo = F}
+
+library(MyFunctions)
+
+packages <- c(
+  "readxl", # Read dataframe
+  "tidyverse", # for all data wrangling and ggplot
+  "janitor", # for data cleaning
+  "sf", #Spatial analysis 
+  "sp", #Spatial analysis 
+  "rnaturalearth", # For maps
+  "doParallel",
+  "foreach",
+  # For netcdf files
+  "ncdf4",
+  "metR",
+  "data.table"
+)
+
+my_lib(packages)
+
+# Fix new updates of sf package
+sf::sf_use_s2(use_s2 = FALSE)
+```
+
+# Functions
+
+```{r main_fx, eval = F, echo = F}
+
+taxon = 601951
+
+mainfx <- function(taxon){
+  
+  to_read <- paste0(taxon,"MCP.RData")
+  
+  for(m in 1:6){
+    
+    file_to_read <- paste0(scenrios[m],"/",to_read)
+    
+    if(file.exists(file_to_read)){
+      
+      load(file_to_read)
+      
+      # Transform it to same name sppMCPfnl
+      # suppressWarnings(
+      # if(exists("data")){
+      #   spp_data <- as.data.frame(data) %>% 
+      #     rowid_to_column("index")
+      #   rm(data)
+      # }
+      
+      if(exists("sppMCPfnl")){
+        spp_data <- as.data.frame(sppMCPfnl) %>% 
+          rowid_to_column("index")
+        rm(sppMCPfnl)
+      }
+      # )
+      
+      colnames(spp_data) <- c("index",(seq(1951,2100,1)))
+      rm(sppMCPfnl) # remove data for computing power
+      
+      early_data <- spp_data %>% 
+        gather("year","value",`1951`:`2100`) %>% 
+        mutate(period = ifelse(year < 2014 & year > 1995,"present_1995_2014",
+                               ifelse(year < 2039 & year > 2020,"mid_2020_2039",
+                                      # ifelse(year < 2100 & year > 2081,"late_2081_2100",
+                                      NA))
+        ) %>% 
+        filter(!is.na(period)) %>% 
+        left_join(regional_grid,
+                  by = "index",
+                  relationship = "many-to-many") %>%
+        filter(!is.na(eez_id)) %>%
+        group_by(eez_name,year,period) %>% 
+        # Sum total catch per eez per year
+        summarise(eez_catch = sum(value, na.rm = T),.groups = "drop") %>% 
+        group_by(eez_name,period) %>% 
+        # Average yearly data
+        summarise(mcp = mean(eez_catch,na.rm = T),.groups = "drop") %>% 
+        mutate(
+          taxon_key = taxon,
+          esm = str_sub(file_to_read,79,82),
+          ssp = ifelse(str_sub(file_to_read,83,84) == 26,"ssp126","ssp585")
+        )
+      
+      
+      # Join data for all three models
+      if(m == 1){
+        partial_output <- early_data
+      }else{
+        partial_output <- bind_rows(partial_output,early_data)
+      }
+      
+    }else{
+      partial_output
+      print(file_to_read)
+    }
+  }
+  
+  print(paste(unique(partial_output$esm)))
+  
+  # Average ESMs +- SD
+  final_output <- partial_output %>% 
+    group_by(taxon_key,eez_name,period,ssp) %>% 
+    summarise(mean_mcp = mean(mcp, na.rm =T),
+              sd_mcp = sd(mcp, na.rm =T),
+              .groups = "drop") %>% 
+    # remove cases where all three periods are 0
+    group_by(taxon_key,eez_name,period,ssp) %>% 
+    filter(any(mean_mcp != 0))
+  
+  
+  
+  name <- paste0(taxon,"_mcp_of.csv")
+  print(paste(unique(name)))
+  
+  write_csv(final_output,
+            my_path("R","mcp_nutrition",name))
+  
+  
+} # Close function
+
+```
+
+# Data
+
+```{r}
+
+# Hotspots data
+hotspot_data <- my_path("D", name= "hotspots_data.csv", read = T)
+
+# species list
+dbem_spp <- my_data("dbem_species")
+
+ran_spp <- list.files(my_path("R","mcp_nutrition"))
+
+ran_spp <- str_sub(ran_spp,1,6)
+
+dbem_spp <- dbem_spp %>% 
+  filter(!taxon_key %in% ran_spp)
+
+
+regional_grid <-
+  my_data("sau_index") %>% 
+  filter(eez_name %in% hotspot_data$eez_name)
+
+# List esm folders
+scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)[-3]
+
+
+
+```
+
+# Run protocol
+
+```{r}
+
+mainfx(taxon = dbem_spp$taxon_key[1])
+
+mclapply(dbem_spp$taxon_key,mainfx,mc.cores = 10)
+
+```
+
+# Figures 
+
+```{r}
+
+results_path <-
+  my_path("R","mcp_nutrition",list_files = "paths")
+
+mcp_nut_df <- bind_rows(
+  lapply(results_path, fread)
+) %>% 
+  left_join(my_data("dbem_species")) %>% 
+  select(taxon_key,taxon_name,common_name,name = eez_name,period:sd_mcp)
+
+sau_sf <- my_sf("SAU")
+
+```
+
+```{r}
+
+map_df <- mcp_nut_df %>% 
+  # group_by(name,period,ssp) %>% 
+  # summarise(
+  #   sum_mcp = sum(mean_mcp,na.rm = T)
+  # ) %>% 
+  filter(
+    name == "Ecuador",
+    ssp == "ssp585") %>% 
+  select(-sd_mcp,-name) %>% 
+  spread(period,mean_mcp) %>% 
+  mutate(
+    per_change = my_chng(present_1995_2014,mid_2020_2039,limit = 50)
+  )
+
+map_fig <- sau_sf %>% 
+  left_join(map_df) %>% 
+  filter(!is.na(per_change))
+
+map <- ggplot(map_fig) +
+  my_land_map(fill = "grey70", colo = "grey70") +
+  geom_sf(
+    aes(
+      fill = per_change
+    )
+  ) +
+  facet_wrap(~ssp) +
+  scale_fill_gradient2("Change in MCP (%)",
+                       limits = c(-50,50)
+                       ) +
+  my_ggtheme_m(leg_width = 2)
+
+ggsave(
+  "map.png",
+  map,
+  width = 10,
+  height = 4
+)
+
+```
+
