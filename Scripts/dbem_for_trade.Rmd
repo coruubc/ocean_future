@@ -502,6 +502,7 @@ sau_taxon %>%
   
 ```
 
+
 ## Species - Genus relation data
 
 ```{r}
@@ -527,4 +528,40 @@ write_csv(sub_df,
           "sau_taxa_to_genus_family.csv")
 
 ```
+
+
+
+# Share Per Change Data
+
+
+```{r}
+
+files_list <- my_path("R",extra_path = "mcp_nutrition",list_files = "paths")
+
+
+for(i in 1:length(files_list)){
+
+    file_to_read <- files_list[i]
+  
+  
+  read_csv(file_to_read) %>% 
+    select(-sd_mcp) %>% 
+    pivot_wider(names_from = "period",values_from = "mean_mcp") %>% 
+    mutate(
+      per_change = my_chng(present_1995_2014,mid_2020_2039)
+    ) %>% 
+    select(taxon_key,eez_name,ssp,per_change) %>% 
+    write_csv(
+      .,
+      paste0(str_sub(file_to_read,1,str_count(file_to_read)-6),"perchng.csv")
+    )
+  
+}
+
+
+
+
+```
+
+
 

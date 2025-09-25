@@ -1,0 +1,86 @@
+---
+title: "Final Report on Climate-Driven Changes in Commercially Important Fish Stocks for Oceans Future's Hotspots"
+subtitle: ""
+author: "Juliano Palacios Abrantes and William W.L. Cheung"
+date: "December 20, 2024 | Contact j.palacios@oceans.ubc.ca"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Overview
+
+This report provides a summary of the work completed for the project "Oceans futures: Climate and Blue Foods Security". The project's objective is to advance our understanding of the role of climate change on blue food security through the following two goals:
+
+1.  Strengthen global institutional support for activities that improve blue food security by improving USAID’s Famine Early Warning System model (FEWS NET) through the explicit consideration of blue foods.
+
+2.  Increase the ability of high-risk nations to achieve future blue food security. 
+
+## Outputs
+
+For the purpose of this contribution, the deliverable were:
+
+1. Provide high-level review of report (authored by Sarah Glaser) before it is shared with USAID. The report will detail the analysis already conducted by Dr. Palacios Abrantes during Oceans Futures platform version 1 creation, and new analysis by Dr. Glaser, to identify hotspots of climate-driven fisheries migration. The goal of the report is to introduce USAID to the process and models.
+ - *Completed and devlivered in August of 2024*
+ 
+2. Presentation of maps of climate-driven fish migration and other analytical outputs of UBC’s fisheries model showing climate risks to blue foods. The format will be PowerPoint (or similar) style and will be presented to USAID during an agreed on group meeting (either virtual in in-person in Washington, DC).
+- *Completed and delivered in September of 2024*
+
+3. Updated DBEM modeling outputs showing fish migration under scenarios of climate change, from target stocks (chosen collaboratively with the larger project team. Modeling outputs will be in the form of changes in biomass (either as percentage change or changes in total biomass in metric tons from a baseline). Scale of analysis will be at least the EEZ scale, and potentially high resolution if feasible. At least ten stocks will be disaggregated based on feedback from USAID on target stocks.
+- *Completed in December of 2024 [See results below]*
+
+4. Integration of climate-fisheries outputs as described in Deliverable 3 with nutrition and trade data, in collaboration with Environmental Defense Fund, University of Washington, and WWF. This will generate Output 1.3 for the larger project that will improve identification of blue food security risk hotspots under various
+climate scenarios and timelines.
+- *Completed in December of 2024 [See results below]*
+
+5. Activity 1: attend a virtual or in-person meeting with USAID before the end of the
+calendar year 2024.
+- *Completed and delivered in September of 2024*
+
+Below, you will find the methods and results relevant to points 3 and 4 of the requested outputs. Specifically, the results correspond to deliverable #3, which is intended to be integrated with deliverable #4. Please note that the data itself is not included here due to file size and practicality.
+
+Currently, these data are being utilized by the Environmental Defense Fund, the University of Washington, and WWF to complete deliverable #4. The UBC team will continue collaborating with them in this process.
+
+# Methods
+
+*Note that these methods are similar to those used for informing the Hotspots analysis.*
+
+
+Here, we coupled the Dynamic Bioclimate Envelope Model (DBEM) with three CMIP6 Earth System Models (GFDL, IPSL, MPIS) to project potential changes in fish catch under cliamte change. This numerical model (i.e., DBEM) simulates the impact of climate change on exploited fish species through predictions for the habitat suitability and other population dynamics of a given fish species under scenarios of climate change impacts like ocean temperature, oxygen availability, and acidity (Cheung et al., 2013b). We projected the distribution of commercially important species following two Shared Socioeconomic Pathways (SSPs); SSP 126 representing a low emission / high mitigation scenario and SSP 585 representing a high emission / no mitigation scenario. 
+
+The model was ran for 820 species ocurring in the 59 EEZs identified in the Hot-spots analyis (Please see WWF report  *BLUE FOOD (IN)SECURITY: Future Hotspot Analysis for Supporting USAID’s Famine Early Warning System (FEWS Net)*). For each species, we projected its future maximum catch potential or "MCP" (a proxy of MSY - See reference documents) within each EEZ according to the Sea Around Us, from 1951 to 2100. We then determined a present time period representing the average projections from 1995 to 2014 to match the historical data used by the ESMs and a future time period of 2020 to 2039 representing the early 21st century. Thus, for each species (*s*) and EEZ (*e*) we first aggregated all grid cells within the EEZ and then averaged them by the time periods. The average was done to reduce the temporal (natural) variability of the system (See reference documentation). We then estimate the percentage change in MCP ($\Delta{MCP}_p$) between present and future time periods as:
+
+
+$$\Delta{MCP}_{se} =\frac{MCP_f-MCP_p}{MCP_p}*100$$
+
+Where $MCP_f$ represents the MCP in the future and $MCP_p$ represents the current time period. As arbitrary rules, if $MCP_p$ = 0 & $MCP_f$ > 0 then ($\Delta{MCP_s}$) = 100, and if $MCP_p$ > 0 & $MCP_f$ < 0 then ($\Delta{MCP_s}$) = -100. Finally, the results for each species and SSP was average by ESM $\pm$ s.d. to account for structural differences among Earth System Models models (Frölicher*et al.*, 2016).
+
+
+# Results
+
+We projected changes in maximum catch potential under two climate change scenarios for 820 species within 59 EEZs (Figure 1). Species-level results from these projections are available in the repositories mentioned below Summarized here as the total biomass change in each each EEZ as a result of the change in all species aggregated. Overall patterns of change are consistent with global trends showing tropical countries loosing MCP and temperate and polar countries gaining MCP. However, it is important to acknowledge that these broad trends mask important regional and species specific variations. For example, under SSP5-8.5, Ecuador presents an increase in MCP of >50% for Eastern Pacific bonito (*Sarda chiliensis*) and 49% decrease in MCP for Peruvian anchoveta (*Engraulis ringens*).
+
+```{r mcpresutls, eval = T, echo = T, fig.width = 10, fig.height = 4, echo=FALSE, fig.cap="Changes in maximum catch potential (MCP) for all species analyzed in the exclusive exonomic zone of the hot spots identified in Oceans Future. Note that change has been caped at 50% to ease visulization. See below for data availability.", out.extra=''}
+
+# Call the image
+img <- png::readPNG("../Results/Figures/mcp_map.png")
+
+# Print the image
+grid::grid.raster(img)
+```
+
+
+
+All code developed for this project can be found on [GitHub](https://github.com/coruubc/ocean_future) and complete data files available for download [here](https://ubcca-my.sharepoint.com/:f:/r/personal/jepa88_student_ubc_ca/Documents/Data/ocean_future/Results/mcp_nutrition?csf=1&web=1&e=6jcjOV). Please request permissions to Juliano Palacios at j.palacios@oceans.ubc.ca. Note that this is a temporary repository and data will be moved as per WWF request. 
+
+# References
+
+- Cheung, W. W. L.,*et al.*, 2009. Projecting global marine biodiversity impacts under climate change scenarios. Fish and Fisheries, 10 (3), 235–251.
+
+- Cheung, W. W. L.,*et al.*, 2016. Structural uncertainty in projecting global fisheries catches under climate change. Ecological Modelling, 325, 57–66.
+
+- Frölicher, T. *et al.*, 2016. Sources of uncertainties in 21st century projections of potential ocean ecosystem stressors. Global Biogeochemical Cycles [online], 30 (8), 1224–1243.
+
+- Tittensor, D. P., *et al.*, 2021. Next-generation ensemble projections reveal higher climate risks for marine ecosystems. Nature Climate Change, 11 (11), 973–981.

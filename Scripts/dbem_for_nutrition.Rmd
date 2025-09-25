@@ -34,44 +34,34 @@ sf::sf_use_s2(use_s2 = FALSE)
 
 ```{r main_fx, eval = F, echo = F}
 
-taxon = 601951
+# taxon = 600035
 
 mainfx <- function(taxon){
+  print(taxon)
   
-  to_read <- paste0(taxon,"MCP.RData")
+  to_read <- paste0(taxon,"Catch.RData")
   
   for(m in 1:6){
     
-    file_to_read <- paste0(scenrios[m],"/",to_read)
+    file_to_read <- paste0(scenarios[m],"/",to_read)
     
     if(file.exists(file_to_read)){
       
       load(file_to_read)
       
-      # Transform it to same name sppMCPfnl
-      # suppressWarnings(
-      # if(exists("data")){
-      #   spp_data <- as.data.frame(data) %>% 
-      #     rowid_to_column("index")
-      #   rm(data)
-      # }
+      data <- as.data.frame(data) %>% 
+        rowid_to_column("index")
+      colnames(data) <- c("index",(seq(1851,2100,1)))
       
-      if(exists("sppMCPfnl")){
-        spp_data <- as.data.frame(sppMCPfnl) %>% 
-          rowid_to_column("index")
-        rm(sppMCPfnl)
-      }
-      # )
-      
-      colnames(spp_data) <- c("index",(seq(1951,2100,1)))
-      rm(sppMCPfnl) # remove data for computing power
-      
-      early_data <- spp_data %>% 
+      early_data <- data %>% 
         gather("year","value",`1951`:`2100`) %>% 
-        mutate(period = ifelse(year < 2014 & year > 1995,"present_1995_2014",
-                               ifelse(year < 2039 & year > 2020,"mid_2020_2039",
-                                      # ifelse(year < 2100 & year > 2081,"late_2081_2100",
-                                      NA))
+        select(year,value,index) %>% 
+        mutate(
+          period = case_when(
+            year > 1995 & year < 2015 ~ "present_1995_2014",
+            year > 2020 & year < 2039 ~ "mid_2020_2039",
+            TRUE ~ NA_character_
+          )
         ) %>% 
         filter(!is.na(period)) %>% 
         left_join(regional_grid,
@@ -86,8 +76,8 @@ mainfx <- function(taxon){
         summarise(mcp = mean(eez_catch,na.rm = T),.groups = "drop") %>% 
         mutate(
           taxon_key = taxon,
-          esm = str_sub(file_to_read,79,82),
-          ssp = ifelse(str_sub(file_to_read,83,84) == 26,"ssp126","ssp585")
+          esm = str_sub(file_to_read,46,49),
+          ssp = ifelse(str_sub(file_to_read,50,51) == 26,"ssp126","ssp585")
         )
       
       
@@ -108,23 +98,28 @@ mainfx <- function(taxon){
   
   # Average ESMs +- SD
   final_output <- partial_output %>% 
-    group_by(taxon_key,eez_name,period,ssp) %>% 
-    summarise(mean_mcp = mean(mcp, na.rm =T),
-              sd_mcp = sd(mcp, na.rm =T),
-              .groups = "drop") %>% 
-    # remove cases where all three periods are 0
-    group_by(taxon_key,eez_name,period,ssp) %>% 
-    filter(any(mean_mcp != 0))
+    spread(period,mcp) %>% 
+    mutate(
+      per_change = my_chng(present_1995_2014,mid_2020_2039,100)
+    ) %>% 
+    filter(!is.na(per_change)) %>% 
+    group_by(taxon_key,eez_name,ssp) %>% 
+    summarise(mean_mcp_delta_2030 = mean(per_change, na.rm =T),
+              sd_mcp_delta_2030 = sd(per_change, na.rm =T),
+              .groups = "drop")
   
   
+  # Save delta data for trade
+  trade_name <- paste0("percentage_change_",taxon,".csv")
+    write_csv(final_output,
+            my_path("R","trade_results/delta_mcp/",trade_name))
   
-  name <- paste0(taxon,"_mcp_of.csv")
-  print(paste(unique(name)))
+  # Save agg data for nutrition 
+  nut_name <- paste0(taxon,"_mcp.csv")
+  write_csv(partial_output,
+            my_path("R","mcp_nutrition",nut_name))
   
-  write_csv(final_output,
-            my_path("R","mcp_nutrition",name))
-  
-  
+  message("Finishing processing: ", taxon)
 } # Close function
 
 ```
@@ -133,27 +128,35 @@ mainfx <- function(taxon){
 
 ```{r}
 
+
+# eez grid ID
+regional_grid <- my_data("sau_index")
+
 # Hotspots data
 hotspot_data <- my_path("D", name= "hotspots_data.csv", read = T)
 
 # species list
-dbem_spp <- my_data("dbem_species")
+# dbem_spp <- list.files(my_path("R","trade_results/delta_mcp"))
 
-ran_spp <- list.files(my_path("R","mcp_nutrition"))
+dbem_spp <- list.files("/Volumes/Enterprise/Data/dbem/dbem_update/c6gfdl26F1UP", pattern = "Catch.RData")
+dbem_spp <- str_sub(dbem_spp,1,6)
 
-ran_spp <- str_sub(ran_spp,1,6)
+ran_spp <- list.files(my_path("R","trade_results/delta_mcp"))
 
-dbem_spp <- dbem_spp %>% 
-  filter(!taxon_key %in% ran_spp)
+ran_spp <- str_sub(ran_spp,19,24)
 
+# dbem_spp <- dbem_spp %>% 
+  # filter(!taxon_key %in% ran_spp)
+
+# Filter out species allready ran
+dbem_spp <- dbem_spp[!dbem_spp %in% ran_spp]
 
 regional_grid <-
   my_data("sau_index") %>% 
   filter(eez_name %in% hotspot_data$eez_name)
 
 # List esm folders
-scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)[-3]
-
+scenarios <- list.files("/Volumes/Enterprise/Data/dbem/dbem_update/",full.names = T )
 
 
 ```
@@ -161,12 +164,41 @@ scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6
 # Run protocol
 
 ```{r}
+# for(i in 2:4){
+# mainfx(taxon = dbem_spp[i])
+# }
+# spp_ran <- list.files(my_path("D",))
+# detectCores()
+mclapply(dbem_spp,mainfx,mc.cores = 6)
 
-mainfx(taxon = dbem_spp$taxon_key[1])
+# lapply(dbem_spp$taxon_key, mainfx)
 
-mclapply(dbem_spp$taxon_key,mainfx,mc.cores = 10)
 
 ```
+
+## Test runs
+
+```{r}
+
+delta_data <-
+  my_path("R","trade_results/delta_mcp",fn = T, list_files = "paths")
+
+# Check files are not corrupted
+check_fx <- function(path){
+  test <- try(read_csv(path,show_col_types = FALSE),silent = T)
+  if(inherits(test, "try-error")){
+    print(paste("Error in file:",path))
+    stop()
+  }else{
+    print(paste("File ok:",path))
+  }
+}
+
+lapply(delta_data,check_fx)
+
+read_csv(delta_data[1],show_col_types = FALSE) %>% names()
+```
+
 
 # Figures 
 
@@ -215,7 +247,7 @@ map <- ggplot(map_fig) +
   facet_wrap(~ssp) +
   scale_fill_gradient2("Change in MCP (%)",
                        limits = c(-50,50)
-                       ) +
+  ) +
   my_ggtheme_m(leg_width = 2)
 
 ggsave(
