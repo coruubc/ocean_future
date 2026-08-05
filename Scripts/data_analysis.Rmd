@@ -81,23 +81,23 @@ This script uses the DBEM runs with the CMIP6 Earth System Models (GFDL, IPSL, M
 Climate change projections for the following species were requested to be used in the project:
 
 - Global for tunas. 
-  - *Thunnus albacares*
-  - *Katsuwonus pelamis*
+- *Thunnus albacares*
+- *Katsuwonus pelamis*
 
 - Alaska cod, they might also extend into other EEZs in the Arctic. 
 
-  - *Gadus macrocephalus*
+- *Gadus macrocephalus*
 
 - Anchovy, I thought we could include all species in the family Engraulidae. 
-  - *Engraulis albidus*
-  - *Engraulis anchoita*
-  - *Engraulis australis*
-  - *Engraulis capensis* 
-  - *Engraulis encrasicolus*
-  - *Engraulis eurystole*
-  - *Engraulis japonicus*
-  - *Engraulis mordax*
-  - *Engraulis ringens*
+- *Engraulis albidus*
+- *Engraulis anchoita*
+- *Engraulis australis*
+- *Engraulis capensis* 
+- *Engraulis encrasicolus*
+- *Engraulis eurystole*
+- *Engraulis japonicus*
+- *Engraulis mordax*
+- *Engraulis ringens*
 
 
 ## Extra species
@@ -105,13 +105,44 @@ Climate change projections for the following species were requested to be used i
 - *Scomber scombrus*
 - *Gadus chalcogrammus*
 
+There was a second round of extra speceis requested on July of 2026, these are:
+
+From Peru and Chile EEZs
+- Anchoveta (Engraulis ringens) *Done in previous round*
+- Spanish sardine (Sardinops sagax)
+- Inca scad/Chilean jack mackerel (Trachurus murphyi)
+- Common sardine (Strangomera bentincki) *Note: name in DBEM is wrong, it apears as "Clupea bentincki" Araucanian herring so be cautious about this result.*
+- Pacific chub mackerel (Scomber japonicus)
+
+From US EEZs
+- Atlantic menhaden (Brevoortia tyrannus)
+- Coho salmon (Oncorhynchus kisutch)
+- Pink salmon (Oncorhynchus gorbuscha)
+- Sockeye salmon (Oncorhynchus nerka)
+
+Norway, Denmark, UK EEZs
+- Atlantic cod (Gadus morhua)
+
+Norway, Denmark EEZs
+- European sprat (Sprattus sprattus)
+- N Atlantic herring (Clupea harengus)
+- Atlantic mackerel (Scomber scombrus) *Done in previous round*
+- Blue whiting (Micromesistius poutassou)
+
+Mexico EEZ
+- Pacific threadfin herring (Opisthonema libertate)
+
+US and Canada EEZs
+- North Pacific hake (Merluccius productus)
+
+
 <!-- ## Get EEZs -->
 
 ```{r select_eezs, eval = F, echo = F}
 
 # selected_countries <- c(
-  # "Peru",
-  # "Chile"
+# "Peru",
+# "Chile"
 # )
 
 # Read SAU EEZs
@@ -128,13 +159,13 @@ sf_sau_eez <- MyFunctions::my_sf("SAU") %>%
 sf_region <-
   sf_sau_eez %>% 
   filter(name %in% selected_countries)
-  
+
 unique(sf_region$name)
-  
+
 length(unique(sf_region$name))
 
 # write_csv(sf_region %>% as.data.frame() %>% select(-geometry),
-      # "../data/spatial/region_index.csv")
+# "../data/spatial/region_index.csv")
 
 # Visually make sure
 sf_region %>%  st_simplify(preserveTopology = TRUE, dTolerance = 1) %>% 
@@ -150,35 +181,127 @@ Here we filter our model runs to the selected species. There are eight species i
 
 # Read species list
 
-exploited_species_list <- read_csv("~/Library/CloudStorage/OneDrive-UBC/Data/Species/exploited_species_list.csv")
+exploited_species_list <- my_data("dbem_species")
 
 spp_selected <- c(
   # "Thunnus albacares",
-                  # "Katsuwonus pelamis",
-                  # "Engraulis albidus",
-                  # "Engraulis anchoita",
-                  # "Engraulis australis",
-                  # "Engraulis capensis ",
-                  # "Engraulis encrasicolus",
-                  # "Engraulis eurystole",
-                  # "Engraulis japonicus",
-                  # "Engraulis mordax",
-                  # "Engraulis ringens",
-                  # "Gadus macrocephalus",
-                  "Scomber scombrus",
-                  "Theragra chalcogramma"
-                  )
+  # "Katsuwonus pelamis",
+  # "Engraulis albidus",
+  # "Engraulis anchoita",
+  # "Engraulis australis",
+  # "Engraulis capensis ",
+  # "Engraulis encrasicolus",
+  # "Engraulis eurystole",
+  # "Engraulis japonicus",
+  # "Engraulis mordax",
+  # "Engraulis ringens",
+  # "Gadus macrocephalus",
+  # "Scomber scombrus",
+  # "Theragra chalcogramma"
+  # ------------------- NEW REQUESTED SPECIES 
+  "Sardinops sagax",           # Spanish sardine
+  "Trachurus murphyi",         # Inca scad / Chilean jack mackerel
+  "Clupea bentincki",     # Common sardine 
+  "Scomber japonicus",         # Pacific chub mackerel
+  "Brevoortia tyrannus",       # Atlantic menhaden
+  "Oncorhynchus kisutch",      # Coho salmon
+  "Oncorhynchus gorbuscha",     # Pink salmon
+  "Oncorhynchus nerka",        # Sockeye salmon
+  "Gadus morhua",              # Atlantic cod
+  "Sprattus sprattus",         # European sprat
+  "Clupea harengus",           # N Atlantic herring
+  "Micromesistius poutassou",  # Blue whiting
+  "Opisthonema libertate",     # Pacific threadfin herring
+  "Merluccius productus"       # North Pacific hake
+)
+
 
 
 # Read species list
 spp_list <- exploited_species_list %>% 
   janitor::clean_names() %>% 
-  filter(taxon_name %in% spp_selected)
+  filter(taxon_name %in% spp_selected) %>% 
+  select(taxon_key,taxon_name)
 
 # Save complete list
 # write_csv(spp_list,"../Data/project_spplist.csv")
 
-head(spp_list,8)
+# head(spp_list)
+
+
+
+spp_df <- data.frame(
+  taxon_name = c(
+    rep("Sardinops sagax", 2),	
+    rep("Trachurus murphyi", 2),
+    rep("Clupea bentincki", 2),
+    rep("Scomber japonicus", 2),
+    rep("Brevoortia tyrannus", 5),
+    rep("Oncorhynchus kisutch", 5),
+    rep("Oncorhynchus gorbuscha", 5),
+    rep("Oncorhynchus nerka", 5),
+    rep("Gadus morhua", 4),
+    rep("Sprattus sprattus", 3),
+    rep("Clupea harengus", 3),
+    rep("Micromesistius poutassou", 3),
+    rep("Opisthonema libertate", 1),
+    rep("Merluccius productus", 3)
+  ),
+  common_name = c(
+    rep("Spanish sardine", 2),
+    rep("Chilean jack mackerel", 2),
+    rep("Common sardine", 2),
+    rep("Pacific chub mackerel", 2),
+    rep("Atlantic menhaden", 5),
+    rep("Coho salmon", 5),
+    rep("Pink salmon", 5),
+    rep("Sockeye salmon", 5),
+    rep("Atlantic cod", 4),
+    rep("European sprat", 3),
+    rep("N Atlantic herring", 3),
+    rep("Blue whiting", 3),
+    rep("Pacific threadfin herring", 1),
+    rep("North Pacific hake", 3)
+  ),
+  region = c(
+    "Chile",
+    "Peru",
+    "Chile",
+    "Peru",
+    "Chile",
+    "Peru",
+    "Chile",
+    "Peru",
+    rep(c("USA (Alaska, Arctic)",
+          "USA (Alaska, Subarctic)",
+          "USA (East Coast)",
+          "USA (Gulf of Mexico)",
+          "USA (West Coast)"),4),
+    "Norway",
+    "Denmark (Baltic Sea)",
+    "Denmark (North Sea)",
+    "United Kingdom",
+    "Norway",
+    "Denmark (Baltic Sea)",
+    "Denmark (North Sea)",
+    "Norway",
+    "Denmark (Baltic Sea)",
+    "Denmark (North Sea)",
+    "Norway",
+    "Denmark (Baltic Sea)",
+    "Denmark (North Sea)",
+    "Mexico (Pacific)",
+    "Canada (Pacific)",
+    "USA (West Coast)",
+    "USA (Alaska, Subarctic)"
+  ),
+  stringsAsFactors = FALSE
+) 
+
+spp_list <- spp_list %>% 
+  left_join(spp_df) %>% 
+  mutate(common_name = ifelse(taxon_key == 601530,"Common sardine",common_name))
+
 ```
 
 ## Main analysis
@@ -203,9 +326,21 @@ mainfx <- function(taxon){
   
   
   # List esm folders
-  scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)[-3]
+  # scenrios <- list.files("~/Library/CloudStorage/OneDrive-UBC/Data/dbem/dbem_cmip6/r_data",full.names = T)[-3]
+  scenrios <- list.files("/Volumes/Enterprise/Data/dbem/dbem_update",full.names = T)
   
-  to_read <- paste0(taxon,"MCP.RData")
+  to_read <- paste0(taxon,"Catch.RData")
+  
+  
+  # Filter species list to the taxon of interest
+  spp_df_region <- spp_list %>% 
+    filter(taxon_key %in% taxon)
+  
+  # filter the regional grid to the EEZs of interest
+  regional_grid <- my_data("sau_index") %>% 
+    filter(eez_name %in% spp_df_region$region)
+  
+  
   
   for(m in 1:6){
     
@@ -219,15 +354,15 @@ mainfx <- function(taxon){
       if(exists("sppMCPfnl", envir = .GlobalEnv) == TRUE){
         
         spp_data <- as.data.frame(sppMCPfnl) %>% 
-        rowid_to_column("index")
+          rowid_to_column("index")
         
         colnames(spp_data) <- c("index",(seq(1951,2100,1)))
-      rm(sppMCPfnl) # remove data for computing power
+        rm(sppMCPfnl) # remove data for computing power
         
       }else{
         
         spp_data <- as.data.frame(data) %>% 
-        rowid_to_column("index")
+          rowid_to_column("index")
         colnames(spp_data) <- c("index",(seq(1951,2100,1)))
         rm(data) # remove data for computing power
       }
@@ -236,6 +371,8 @@ mainfx <- function(taxon){
       
       early_data <- spp_data %>% 
         gather("year","value",`1951`:`2100`) %>% 
+        select(index,year,value) %>% 
+        filter(!is.na(value)) %>% 
         mutate(period = ifelse(year < 2014 & year > 1995,"present",NA)) %>% 
         filter(!is.na(period)) %>% 
         left_join(regional_grid,
@@ -251,6 +388,7 @@ mainfx <- function(taxon){
       # Estimate percentage change
       future_data <-  spp_data %>% 
         gather("year","value",`1951`:`2100`) %>% 
+        select(index,year,value) %>% 
         filter(year > 2004) %>% 
         left_join(regional_grid,
                   by = "index") %>%
@@ -270,8 +408,8 @@ mainfx <- function(taxon){
         filter(!is.na(per_change)) %>% 
         select(species,eez_name,year,per_change) %>% 
         mutate(
-          esm = str_sub(file_to_read,79,82),
-          ssp = ifelse(str_sub(file_to_read,83,84) == 26,"ssp126","ssp585")
+          esm = str_sub(file_to_read,45,48),
+          ssp = ifelse(str_sub(file_to_read,49,50) == 26,"ssp126","ssp585")
         )
       
       
@@ -288,32 +426,32 @@ mainfx <- function(taxon){
       print(file_to_read)
     }
   }
-    
-    print(paste(unique(partial_output$esm)))
-    
-    final_output <- partial_output %>% 
-      group_by(species,eez_name,year,ssp) %>% 
-      summarise(mean_per_change = mean(per_change, na.rm =T),
-                sd_per_change = sd(per_change, na.rm =T)) %>% 
-      group_by(species,eez_name,ssp) %>% 
-      mutate(
-        per_change_rm = round(zoo::rollmean(
-          mean_per_change,
-          k = 10, 
-          fill = NA, 
-          align = "right")
-        )
-      ) %>% 
-      filter(!is.na(per_change_rm))
-    
-    
-    spp_name <- spp_list %>% filter(taxon_key %in% taxon) %>% pull(common_name)
-    name <- paste0(spp_name,".csv")
-    
-    write_csv(final_output,
-              my_path("R","ocean_future_projections",name))
-    
-    
+  
+  print(paste(unique(partial_output$esm)))
+  
+  final_output <- partial_output %>% 
+    group_by(species,eez_name,year,ssp) %>% 
+    summarise(mean_per_change = mean(per_change, na.rm =T),
+              sd_per_change = sd(per_change, na.rm =T)) %>% 
+    group_by(species,eez_name,ssp) %>% 
+    mutate(
+      per_change_rm = round(zoo::rollmean(
+        mean_per_change,
+        k = 10, 
+        fill = NA, 
+        align = "right")
+      )
+    ) %>% 
+    filter(!is.na(per_change_rm))
+  
+  
+  spp_name <- spp_list %>% filter(taxon_key %in% taxon) %>% pull(common_name) %>% unique()
+  name <- paste0(spp_name,".csv")
+  
+  write_csv(final_output,
+            my_path("R","ocean_future_projections",name))
+  
+  
 } # Close function
 
 ```
@@ -328,13 +466,14 @@ Prepare data for running the protocol
 # spp_list <- read_csv("./Data/project_spplist.csv")
 
 par_spp_list <- spp_list %>% 
-  pull(taxon_key)
+  pull(taxon_key) %>% 
+  unique()
 
 # Get DBEM coords
-dbem_coords <- my_data("dbem_coords")
+# dbem_coords <- my_data("dbem_coords")
 
 # eez grid ID
-regional_grid <- my_data("sau_index")
+# regional_grid <- my_data("sau_index")
 
 ```
 
@@ -360,7 +499,7 @@ Run `mainfx` across species
 # gc()
 
 suppressWarnings(
-lapply(par_spp_list, mainfx)
+  lapply(par_spp_list[9:14], mainfx)
 )
 ```
 
@@ -588,7 +727,7 @@ final_output <- models_output %>%
 write_csv(final_output,
           my_path("R",name = "aggregated_data.csv"))
 
- 
+
 ```
 
 
@@ -724,7 +863,7 @@ model_list <- list.files(my_path("R"),full.names = T)[1:4]
 
 future_df <- bind_rows(
   lapply(model_list, read_csv)
-  )
+)
 
 
 all_models <- bind_rows(hist_df,future_df %>% mutate(ssp = as.character(ssp)))
@@ -737,10 +876,10 @@ unique(all_models$ssp)
 models_df <- all_models %>% 
   left_join(dbem_index, 
             by = c("lat","lon")
-            ) %>% 
+  ) %>% 
   left_join(sau_index,
             by = c("index")
-            ) %>% 
+  ) %>% 
   group_by(eez_name,esm,year,ssp) %>% 
   summarise(tcb = sum(tcb, na.rm = T)) %>% 
   filter(!is.na(eez_name))
